@@ -12,6 +12,21 @@ const KEY: &str = "habits/v1";
 /// meta-analysis of health-behaviour habit formation (median 59–66 days).
 pub const FORMATION_DAYS: usize = 66;
 
+/// Days before today that can still be edited from the calendar — enough
+/// to backfill a forgotten day or two without making history rewritable
+/// wholesale.
+pub const EDIT_WINDOW_DAYS: u64 = 7;
+
+/// Whether `day` is still within the calendar's edit window
+/// (today or up to [`EDIT_WINDOW_DAYS`] back).
+pub fn editable(day: NaiveDate) -> bool {
+    let today = Local::now().date_naive();
+    day <= today
+        && today
+            .checked_sub_days(Days::new(EDIT_WINDOW_DAYS))
+            .is_some_and(|floor| day >= floor)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Habit {
     pub id: u64,
@@ -21,7 +36,7 @@ pub struct Habit {
 }
 
 impl Habit {
-    fn ticks_on(&self, day: NaiveDate) -> usize {
+    pub fn ticks_on(&self, day: NaiveDate) -> usize {
         self.ticks
             .iter()
             .filter(|t| t.with_timezone(&Local).date_naive() == day)
@@ -138,14 +153,44 @@ impl Data {
         }
     }
 
-    /// Remove the most recent tick, but only if it was made today (fat-finger undo).
-    pub fn undo(&mut self, id: u64) {
-        let today = Local::now().date_naive();
+    /// Record a completion on `day` (calendar backfill). Today gets the real
+    /// time; a past day gets noon local, so timezone and DST edges can't
+    /// shift it onto a neighbouring date. Days outside the edit window are
+    /// ignored. Ticks stay sorted so the log reads chronologically even
+    /// after backfills.
+    pub fn record_on(&mut self, id: u64, day: NaiveDate) {
+        if !editable(day) {
+            return;
+        }
+        let tick = if day == Local::now().date_naive() {
+            Utc::now()
+        } else {
+            let Some(noon) = day.and_hms_opt(12, 0, 0) else {
+                return;
+            };
+            let Some(local) = noon.and_local_timezone(Local).earliest() else {
+                return;
+            };
+            local.to_utc()
+        };
+        if let Some(habit) = self.habits.iter_mut().find(|h| h.id == id) {
+            habit.ticks.push(tick);
+            habit.ticks.sort_unstable();
+        }
+    }
+
+    /// Remove one tick (the newest) from `day`, within the edit window.
+    pub fn unrecord_on(&mut self, id: u64, day: NaiveDate) {
+        if !editable(day) {
+            return;
+        }
         if let Some(habit) = self.habits.iter_mut().find(|h| h.id == id)
-            && let Some(last) = habit.ticks.last()
-            && last.with_timezone(&Local).date_naive() == today
+            && let Some(pos) = habit
+                .ticks
+                .iter()
+                .rposition(|t| t.with_timezone(&Local).date_naive() == day)
         {
-            habit.ticks.pop();
+            habit.ticks.remove(pos);
         }
     }
 
@@ -220,7 +265,52 @@ mod tests {
     }
 
     #[test]
-    fn add_record_undo_delete() {
+    fn editable_covers_today_through_window_floor() {
+        let today = Local::now().date_naive();
+        assert!(editable(today));
+        assert!(editable(today - Days::new(EDIT_WINDOW_DAYS)));
+        assert!(!editable(today - Days::new(EDIT_WINDOW_DAYS + 1)));
+        assert!(!editable(today + Days::new(1)));
+    }
+
+    #[test]
+    fn record_on_backfills_only_inside_window() {
+        let mut data = Data::default();
+        data.add("t");
+        let id = data.habits[0].id;
+        let today = Local::now().date_naive();
+
+        data.record_on(id, today - Days::new(3));
+        data.record_on(id, today - Days::new(3));
+        assert_eq!(data.habits[0].ticks_on(today - Days::new(3)), 2);
+
+        // Too far back and in the future: both ignored.
+        data.record_on(id, today - Days::new(EDIT_WINDOW_DAYS + 1));
+        data.record_on(id, today + Days::new(1));
+        assert_eq!(data.habits[0].ticks.len(), 2);
+    }
+
+    #[test]
+    fn unrecord_on_removes_one_tick_from_that_day_only() {
+        let mut data = Data::default();
+        data.add("t");
+        let id = data.habits[0].id;
+        let today = Local::now().date_naive();
+        let day = today - Days::new(2);
+
+        data.record_on(id, day);
+        data.record_on(id, today);
+        data.unrecord_on(id, day);
+        assert_eq!(data.habits[0].ticks_on(day), 0);
+        assert_eq!(data.habits[0].ticks_on(today), 1);
+
+        // Nothing left on that day: no-op.
+        data.unrecord_on(id, day);
+        assert_eq!(data.habits[0].ticks.len(), 1);
+    }
+
+    #[test]
+    fn add_record_delete() {
         let mut data = Data::default();
         data.add("  Stretch  ");
         data.add("   "); // whitespace-only is rejected
@@ -231,9 +321,6 @@ mod tests {
         data.record(id);
         data.record(id);
         assert_eq!(data.habits[0].ticks.len(), 2);
-
-        data.undo(id);
-        assert_eq!(data.habits[0].ticks.len(), 1);
 
         data.delete(id);
         assert!(data.habits.is_empty());

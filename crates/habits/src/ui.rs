@@ -1,10 +1,10 @@
 //! The app UI. State is a single [`Data`] signal, persisted to localStorage
 //! after every mutation.
 
-use chrono::Local;
+use chrono::{Datelike, Local, Months, NaiveDate};
 use dioxus::prelude::*;
 
-use crate::store::{Data, FORMATION_DAYS};
+use crate::store::{Data, FORMATION_DAYS, editable};
 
 /// Tracked through the dioxus asset system (not inlined in index.html) so
 /// `dx serve` hot-reloads style edits without a rebuild.
@@ -25,11 +25,166 @@ fn today_count(count: usize) -> Element {
     }
 }
 
+/// The days of the month containing `month`, Monday-first, with leading
+/// `None`s so indices line up with a 7-column grid.
+fn month_cells(month: NaiveDate) -> Vec<Option<NaiveDate>> {
+    let first = month.with_day(1).expect("every month has a day 1");
+    let mut cells = vec![None; first.weekday().num_days_from_monday() as usize];
+    let mut day = first;
+    while day.month() == first.month() {
+        cells.push(Some(day));
+        match day.succ_opt() {
+            Some(next) => day = next,
+            None => break,
+        }
+    }
+    cells
+}
+
+/// Month calendar for one habit: per-day tick counts as green shading, plus
+/// a − / + stepper to correct the last [`crate::store::EDIT_WINDOW_DAYS`]
+/// days. Older days are view-only.
+fn calendar_sheet(
+    mut data: Signal<Data>,
+    mut open: Signal<Option<u64>>,
+    mut month: Signal<NaiveDate>,
+    mut sel: Signal<Option<NaiveDate>>,
+) -> Element {
+    let Some(id) = open() else {
+        return rsx! {};
+    };
+    let Some(habit) = data().habits.into_iter().find(|h| h.id == id) else {
+        return rsx! {};
+    };
+    let today = Local::now().date_naive();
+    let shown = month().with_day(1).expect("every month has a day 1");
+    let this_month = today.with_day(1).expect("every month has a day 1");
+
+    let day_cells: Vec<Element> = month_cells(shown)
+        .into_iter()
+        .map(|cell| {
+            let Some(day) = cell else {
+                return rsx! {
+                    span { class: "cal-blank" }
+                };
+            };
+            let count = habit.ticks_on(day);
+            let mut cls = String::from("cal-day");
+            if count >= 3 {
+                cls.push_str(" hot");
+            }
+            if day == today {
+                cls.push_str(" today");
+            }
+            if sel() == Some(day) {
+                cls.push_str(" sel");
+            }
+            if day > today {
+                cls.push_str(" off");
+            }
+            let shade = if count > 0 {
+                format!(
+                    "background: rgba(156, 207, 143, {:.2})",
+                    0.15 * count.min(4) as f64
+                )
+            } else {
+                String::new()
+            };
+            rsx! {
+                button {
+                    class: "{cls}",
+                    style: "{shade}",
+                    disabled: day > today,
+                    title: "{count} × {day}",
+                    onclick: move |_| sel.set(Some(day)),
+                    "{day.day()}"
+                }
+            }
+        })
+        .collect();
+
+    let editor = match sel() {
+        None => rsx! {},
+        Some(day) => {
+            let count = habit.ticks_on(day);
+            rsx! {
+                div { class: "cal-edit",
+                    span { class: "cal-date", {day.format("%a %-d %b").to_string()} }
+                    if editable(day) {
+                        button {
+                            class: "mini",
+                            disabled: count == 0,
+                            title: "One less that day",
+                            onclick: move |_| {
+                                data.with_mut(|d| {
+                                    d.unrecord_on(id, day);
+                                    d.save();
+                                });
+                            },
+                            "−"
+                        }
+                        span { class: "cal-count", "{count}" }
+                        button {
+                            class: "mini",
+                            title: "One more that day",
+                            onclick: move |_| {
+                                data.with_mut(|d| {
+                                    d.record_on(id, day);
+                                    d.save();
+                                });
+                            },
+                            "+"
+                        }
+                    } else {
+                        span { class: "cal-count", "{count}" }
+                        span { class: "cal-lock", "view only" }
+                    }
+                }
+            }
+        }
+    };
+
+    rsx! {
+        div { class: "overlay", onclick: move |_| open.set(None),
+            div { class: "sheet", onclick: move |e| e.stop_propagation(),
+                div { class: "handle" }
+                h2 { "{habit.name}" }
+                div { class: "cal-nav",
+                    button {
+                        class: "mini",
+                        title: "Earlier month",
+                        onclick: move |_| month.set(shown - Months::new(1)),
+                        "‹"
+                    }
+                    span { class: "cal-title", {shown.format("%B %Y").to_string()} }
+                    button {
+                        class: "mini",
+                        title: "Later month",
+                        disabled: shown >= this_month,
+                        onclick: move |_| month.set(shown + Months::new(1)),
+                        "›"
+                    }
+                }
+                div { class: "cal-grid",
+                    for wd in ["M", "T", "W", "T", "F", "S", "S"] {
+                        span { class: "cal-wd", "{wd}" }
+                    }
+                    {day_cells.into_iter()}
+                }
+                {editor}
+            }
+        }
+    }
+}
+
 pub fn app() -> Element {
     let mut data = use_signal(Data::load);
     let mut adding = use_signal(|| false);
     let mut new_name = use_signal(String::new);
     let mut confirm_delete = use_signal(|| None::<u64>);
+    let mut calendar = use_signal(|| None::<u64>);
+    let mut cal_month = use_signal(|| Local::now().date_naive());
+    let mut cal_day = use_signal(|| None::<NaiveDate>);
 
     let mut add = move || {
         let name = new_name();
@@ -113,15 +268,15 @@ pub fn app() -> Element {
                         div { class: "actions",
                             button {
                                 class: "mini",
-                                title: "Undo today's last tap",
+                                title: "History calendar",
                                 onclick: move |e| {
                                     e.stop_propagation();
-                                    data.with_mut(|d| {
-                                        d.undo(habit.id);
-                                        d.save();
-                                    });
+                                    let today = Local::now().date_naive();
+                                    cal_month.set(today);
+                                    cal_day.set(Some(today));
+                                    calendar.set(Some(habit.id));
                                 },
-                                "↩"
+                                "▦"
                             }
                             if confirm_delete() == Some(habit.id) {
                                 button {
@@ -161,6 +316,7 @@ pub fn app() -> Element {
                 },
                 "+"
             }
+            {calendar_sheet(data, calendar, cal_month, cal_day)}
             if adding() {
                 div { class: "overlay", onclick: move |_| adding.set(false),
                     div { class: "sheet", onclick: move |e| e.stop_propagation(),
@@ -194,5 +350,20 @@ pub fn app() -> Element {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn month_cells_pad_to_weekday_columns() {
+        // July 2026 starts on a Wednesday: two leading blanks, then 31 days.
+        let cells = month_cells(NaiveDate::from_ymd_opt(2026, 7, 15).unwrap());
+        assert_eq!(cells.len(), 2 + 31);
+        assert!(cells[..2].iter().all(Option::is_none));
+        assert_eq!(cells[2], NaiveDate::from_ymd_opt(2026, 7, 1));
+        assert_eq!(cells[32], NaiveDate::from_ymd_opt(2026, 7, 31));
     }
 }

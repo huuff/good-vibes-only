@@ -2,6 +2,7 @@
 .devenv/
 .devenv.flake.nix
 .pre-commit-config.yaml
+.playwright-cli/
 
 .superpowers
 .playwright-cli

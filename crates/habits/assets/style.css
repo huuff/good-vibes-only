@@ -385,6 +385,95 @@ h1 {
   border-color: var(--clay);
 }
 
+/* --- history calendar ---------------------------------------------- */
+
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.cal-title {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+}
+
+.cal-wd {
+  text-align: center;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.65rem;
+  color: var(--chalk-dim);
+  padding-bottom: 0.15rem;
+}
+
+.cal-day {
+  aspect-ratio: 1;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--chalk);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
+  cursor: pointer;
+}
+
+/* Enough ticks that the green shading gets bright: flip to dark text. */
+.cal-day.hot {
+  color: var(--board);
+  font-weight: 700;
+}
+
+.cal-day.today {
+  border-color: var(--chalk-dim);
+}
+
+.cal-day.sel {
+  border-color: var(--amber);
+}
+
+.cal-day.off {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.cal-edit {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+
+.cal-date {
+  flex: 1;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--chalk-dim);
+}
+
+.cal-count {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--amber);
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+.cal-lock {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--chalk-dim);
+}
+
 :focus-visible {
   outline: 2px solid var(--amber);
   outline-offset: 2px;

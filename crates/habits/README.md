@@ -11,6 +11,11 @@ days). Every practiced day adds a day of strength; a single missed day is
 free (occasional misses don't affect formation), but each further
 consecutive idle day erodes half a day.
 
+Each card's ▦ button opens a month calendar shaded by how often the habit
+was done each day. Selecting a day shows its count with a − / + stepper:
+today and the previous 7 days can be corrected there (forgot to log,
+logged twice, ...); older days are view-only.
+
 ## Develop
 
 ```sh
