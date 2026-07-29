@@ -1,6 +1,7 @@
 # good-vibes-only
 
-A cargo workspace hosting small, independent vibe-coded Rust projects.
+A cargo workspace hosting small, independent vibe-coded Rust projects,
+plus reusable Nix modules under `nix/`.
 
 - Each project is a workspace member under `crates/`. Start a new one with
   `cargo new crates/<name>` — the root `Cargo.toml` picks it up via glob.
@@ -13,3 +14,8 @@ A cargo workspace hosting small, independent vibe-coded Rust projects.
   `--no-verify`.
 - The flake's `packages.default` builds the whole workspace; keep
   `Cargo.lock` committed and up to date.
+- Home-manager modules live in `nix/home-manager/`; each `<name>.nix`
+  is auto-exported as `homeManagerModules.<name>` (alias `homeModules`),
+  no flake edits needed. Give each one an eval-only smoke test in the
+  flake's `checks` (see `hm-nono`) — `nix flake check --no-build` must
+  pass.
