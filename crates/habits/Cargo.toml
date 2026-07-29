@@ -1,0 +1,11 @@
+[package]
+name = "habits"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+dioxus = { version = "0.7", features = ["web"] }
+gloo-storage = "0.3"
+serde = { version = "1", features = ["derive"] }

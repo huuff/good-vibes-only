@@ -3,6 +3,9 @@
 .devenv.flake.nix
 .pre-commit-config.yaml
 
+.superpowers
+.playwright-cli
+
 # direnv
 .direnv/
 

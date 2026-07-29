@@ -1,0 +1,402 @@
+:root {
+  --board: #16241f;
+  --card: #20332b;
+  --card-edge: #2e4a3d;
+  --chalk: #eae5d4;
+  --chalk-dim: #97ab9d;
+  --amber: #e3a94f;
+  --moss: #9ccf8f;
+  --clay: #d97b6c;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: radial-gradient(120% 90% at 50% 0%, #1c2e27 0%, var(--board) 60%) fixed
+    var(--board);
+  color: var(--chalk);
+  min-height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wrap {
+  max-width: 28rem;
+  margin: 0 auto;
+  /* generous bottom padding keeps the list clear of the floating + */
+  padding: 1.25rem 1rem 6.5rem;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.25rem 0.25rem 1rem;
+}
+
+h1 {
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.date {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--chalk-dim);
+}
+
+/* --- floating add button + new-habit sheet ----------------------- */
+
+.fab {
+  position: fixed;
+  right: calc(1.25rem + env(safe-area-inset-right));
+  bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  width: 3.4rem;
+  height: 3.4rem;
+  font: inherit;
+  font-size: 1.9rem;
+  line-height: 1;
+  color: var(--board);
+  background: var(--chalk);
+  border: none;
+  border-radius: 50%;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.fab:active {
+  transform: scale(0.92);
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fade 0.15s ease-out;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 28rem;
+  background: var(--card);
+  border: 1px solid var(--card-edge);
+  border-bottom: none;
+  border-radius: 1.25rem 1.25rem 0 0;
+  padding: 0.6rem 1rem calc(1.5rem + env(safe-area-inset-bottom));
+  animation: rise 0.2s ease-out;
+}
+
+.handle {
+  width: 2.5rem;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--card-edge);
+  margin: 0 auto 0.9rem;
+}
+
+.sheet h2 {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--chalk-dim);
+  margin-bottom: 0.75rem;
+}
+
+.head-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Desktop add button: hidden on phones, where the floating + rules. */
+.plus {
+  display: none;
+  width: 2.2rem;
+  height: 2.2rem;
+  font: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--chalk-dim);
+  background: transparent;
+  border: 1px solid var(--card-edge);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.plus:hover {
+  color: var(--chalk);
+  border-color: var(--chalk-dim);
+}
+
+/* Wider than a phone: a FAB is a thumb-reach affordance, so it goes
+   away; adding moves to the header and the sheet becomes a centered
+   dialog. */
+@media (min-width: 640px) {
+  .fab {
+    display: none;
+  }
+
+  .plus {
+    display: block;
+  }
+
+  .overlay {
+    align-items: center;
+    padding: 1rem;
+  }
+
+  .sheet {
+    border-radius: 1.25rem;
+    border-bottom: 1px solid var(--card-edge);
+    padding: 1.5rem 1.25rem;
+  }
+
+  .handle {
+    display: none;
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(1.5rem);
+    opacity: 0;
+  }
+}
+
+.add {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.add input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 1rem; /* ≥16px so iOS doesn't zoom on focus */
+  color: var(--chalk);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--card-edge);
+  border-radius: 0.75rem;
+  padding: 0.8rem 1rem;
+}
+
+.add input::placeholder {
+  color: var(--chalk-dim);
+}
+
+.add button {
+  font: inherit;
+  font-weight: 700;
+  color: var(--board);
+  background: var(--chalk);
+  border: none;
+  border-radius: 0.75rem;
+  padding: 0 1.25rem;
+  cursor: pointer;
+}
+
+.add button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.empty {
+  color: var(--chalk-dim);
+  text-align: center;
+  padding: 2.5rem 1rem;
+  line-height: 1.5;
+}
+
+/* --- habit cards -------------------------------------------------- */
+
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.list li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.card {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent), var(--card);
+  border: 1px solid var(--card-edge);
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.08s ease, filter 0.08s ease;
+}
+
+/* The habit taking root: a hairline along the bottom edge that grows
+   toward full width over the ~66 days it takes a habit to stick. */
+.root {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--moss);
+  opacity: 0.4;
+  transition: width 0.4s ease;
+}
+
+.root.rooted {
+  opacity: 0.9;
+}
+
+.card:active {
+  transform: scale(0.98);
+  filter: brightness(1.15);
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.name {
+  flex: 1;
+  font-size: 1.1rem;
+  font-weight: 650;
+  /* break-word, not anywhere: min-content stays a whole word, so the
+     tally can never squeeze the name to one letter per line */
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.card-bottom {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.65rem;
+}
+
+.week {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--chalk-dim);
+  opacity: 0.55;
+}
+
+.dot.done {
+  background: var(--moss);
+  border-color: var(--moss);
+  opacity: 1;
+}
+
+.streak {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  color: var(--amber);
+}
+
+.total {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  color: var(--chalk-dim);
+  margin-left: auto;
+}
+
+/* --- today's count -------------------------------------------------- */
+
+.count {
+  flex: none;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--amber);
+}
+
+.count.dim {
+  color: var(--chalk-dim);
+  font-weight: 400;
+}
+
+/* --- per-habit actions --------------------------------------------- */
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  justify-content: center;
+}
+
+.mini {
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--chalk-dim);
+  background: transparent;
+  border: 1px solid var(--card-edge);
+  border-radius: 0.6rem;
+  min-width: 2.6rem;
+  padding: 0.35rem 0.5rem;
+  cursor: pointer;
+}
+
+.mini:active {
+  filter: brightness(1.4);
+}
+
+.mini.danger {
+  color: var(--clay);
+  border-color: var(--clay);
+}
+
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .fab,
+  .overlay,
+  .sheet,
+  .root {
+    animation: none;
+    transition: none;
+  }
+}

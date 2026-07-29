@@ -7,6 +7,13 @@ _:
   languages.rust.enable = true;
   languages.nix.enable = true;
 
+  # dx builds/serves the Dioxus web crates (crates/habits); the wasm32 std
+  # already ships with nixpkgs' rustc, but linking wasm needs lld.
+  packages = [
+    pkgs.dioxus-cli
+    pkgs.lld
+  ];
+
   git-hooks.hooks = {
     # --- secrets: never commit credentials ---
     ripsecrets.enable = true; # scans staged changes for API keys/tokens
