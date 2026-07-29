@@ -1,7 +1,7 @@
 # Add `lib` etc. to the lambda args when first needed (deadnix rejects
 # unused args, statix rejects empty `{ ... }` patterns — use `_:` if no
 # args remain).
-_:
+{ pkgs, ... }:
 
 {
   languages.rust.enable = true;
