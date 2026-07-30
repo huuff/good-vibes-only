@@ -1,11 +1,18 @@
 # Add `lib` etc. to the lambda args when first needed (deadnix rejects
 # unused args, statix rejects empty `{ ... }` patterns — use `_:` if no
 # args remain).
-_:
+{ pkgs, ... }:
 
 {
   languages.rust.enable = true;
   languages.nix.enable = true;
+
+  # dx builds/serves the Dioxus web crates (crates/habits); the wasm32 std
+  # already ships with nixpkgs' rustc, but linking wasm needs lld.
+  packages = [
+    pkgs.dioxus-cli
+    pkgs.lld
+  ];
 
   git-hooks.hooks = {
     # --- secrets: never commit credentials ---
