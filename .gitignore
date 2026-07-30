@@ -4,8 +4,8 @@
 .pre-commit-config.yaml
 .playwright-cli/
 
-.superpowers
-.playwright-cli
+.superpowers/
+.playwright-cli/
 
 # direnv
 .direnv/

@@ -1,20 +1,25 @@
-# habits
+# habits (TALLY)
 
-Tap-to-track habit PWA built with Dioxus (web/wasm). Fully client-side:
-habits and their timestamped ticks live in the browser's localStorage, so
-the app works offline — no server, no account, no sync.
+Habit-ledger PWA built with Dioxus (web/wasm). Fully client-side: habits
+and their done-days live in the browser's localStorage, so the app works
+offline — no server, no account, no sync.
 
-Each card grows a thin line along its bottom edge as the habit approaches
-66 days' worth of strength — the median time to automaticity found by
-Lally et al. (2010) and confirmed by a 2024 meta-analysis (median 59–66
-days). Every practiced day adds a day of strength; a single missed day is
-free (occasional misses don't affect formation), but each further
-consecutive idle day erodes half a day.
+The Today screen is a ledger: one strong list, a checkbox per habit, the
+current streak as a numeral. On a phone it's a single column with a bottom
+tab bar; from 900px up it grows a rail nav, a 14-day dot strip per habit,
+and a summary sidebar (completion, the week's bars, best streak). Design:
+"TALLY", Modernist system — Archivo, red on light ground, zero radius —
+from a Claude Design exploration (see
+docs/superpowers/specs/2026-07-30-habits-tally-redesign-design.md).
 
-Each card's ▦ button opens a month calendar shaded by how often the habit
-was done each day. Selecting a day shows its count with a − / + stepper:
-today and the previous 7 days can be corrected there (forgot to log,
-logged twice, ...); older days are view-only.
+Days are binary: done or not. The checkbox toggles today; tapping the rest
+of the row opens a detail sheet with a month calendar (the last 7 days can
+be corrected there — forgot to log, logged by mistake…; older days are
+view-only), name/note editing, and delete behind a two-tap confirm.
+
+Storage is schema v2 (`habits/v2`). Data recorded by the v1 app
+(timestamped ticks) is migrated automatically on first load; the old key
+is left in place as a backup.
 
 ## Develop
 
@@ -38,7 +43,8 @@ cp web/* target/dx/habits/release/web/public/
 ```
 
 Then open the URL on the phone once, and "Add to Home Screen". From then on
-it launches and works with no connectivity.
+it launches and works with no connectivity. Archivo is vendored under
+`assets/fonts/`, so no network is needed even for type.
 
 Caveats of being fully client-side: data is per-device (no sync), and
 clearing the browser's site data deletes it.

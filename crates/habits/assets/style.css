@@ -1,12 +1,16 @@
+/* TALLY — Modernist: Archivo, red on light ground, zero radius, 2px rules,
+   flush-left everything. @font-face rules are injected from Rust (the woff2
+   files go through the asset system, so only Rust knows their hashed URLs). */
+
 :root {
-  --board: #16241f;
-  --card: #20332b;
-  --card-edge: #2e4a3d;
-  --chalk: #eae5d4;
-  --chalk-dim: #97ab9d;
-  --amber: #e3a94f;
-  --moss: #9ccf8f;
-  --clay: #d97b6c;
+  --bg: #f3f2f2;
+  --surface: #eae9e9;
+  --text: #201e1d;
+  --accent: #ec3013;
+  --accent-down: #ae1800;
+  --divider: color-mix(in srgb, var(--text) 40%, transparent);
+  --muted: color-mix(in srgb, var(--text) 55%, transparent);
+  --dim: color-mix(in srgb, var(--text) 35%, transparent);
 }
 
 * {
@@ -16,77 +20,474 @@
 }
 
 html {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  background: radial-gradient(120% 90% at 50% 0%, #1c2e27 0%, var(--board) 60%) fixed
-    var(--board);
-  color: var(--chalk);
+  font-family: "Archivo", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
   min-height: 100dvh;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-    env(safe-area-inset-left);
   -webkit-tap-highlight-color: transparent;
 }
 
-.wrap {
-  max-width: 28rem;
-  margin: 0 auto;
-  /* generous bottom padding keeps the list clear of the floating + */
-  padding: 1.25rem 1rem 6.5rem;
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  text-align: left;
 }
 
-header {
+button:disabled {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* --- layout shell -------------------------------------------------- */
+
+.shell {
+  display: flex;
+  min-height: 100dvh;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- desktop rail (hidden on mobile) ------------------------------- */
+
+.rail {
+  width: 200px;
+  flex: none;
+  display: none;
+  flex-direction: column;
+  border-right: 2px solid var(--divider);
+}
+
+.brand {
+  padding: 24px 20px;
+  border-bottom: 2px solid var(--divider);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.brand-dot {
+  color: var(--accent);
+}
+
+.rail-tab {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--divider);
+}
+
+.rail-tab.on {
+  color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.rail-new {
+  margin-top: auto;
+  border-top: 2px solid var(--divider);
+}
+
+.rail-new button {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.plus-sign {
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* --- mobile bottom bar (hidden on desktop) -------------------------- */
+
+.bar {
+  display: flex;
+  border-top: 2px solid var(--divider);
+  position: sticky;
+  bottom: 0;
+  background: var(--bg);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bar-tab {
+  flex: 1;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  border-right: 1px solid var(--divider);
+}
+
+.bar-tab.on {
+  color: var(--accent);
+}
+
+.bar-new {
+  width: 52px;
+  min-height: 52px;
+  flex: none;
+  background: var(--text);
+  color: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 400;
+}
+
+/* --- Today header ---------------------------------------------------- */
+
+.head {
+  padding: calc(20px + env(safe-area-inset-top)) 20px 14px;
+  border-bottom: 2px solid var(--divider);
+}
+
+.head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.head-date {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.head-day {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.title {
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  margin-top: 6px;
+  line-height: 1;
+}
+
+.head-score {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  padding: 0.25rem 0.25rem 1rem;
+  gap: 8px;
+  margin-top: 12px;
 }
 
-h1 {
-  font-size: 1.7rem;
+.score {
+  font-size: 26px;
   font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.date {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--chalk-dim);
-}
-
-/* --- floating add button + new-habit sheet ----------------------- */
-
-.fab {
-  position: fixed;
-  right: calc(1.25rem + env(safe-area-inset-right));
-  bottom: calc(1.5rem + env(safe-area-inset-bottom));
-  width: 3.4rem;
-  height: 3.4rem;
-  font: inherit;
-  font-size: 1.9rem;
   line-height: 1;
-  color: var(--board);
-  background: var(--chalk);
-  border: none;
-  border-radius: 50%;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-  cursor: pointer;
-  transition: transform 0.1s ease;
 }
 
-.fab:active {
-  transform: scale(0.92);
+.score .of {
+  color: var(--dim);
 }
+
+.meter {
+  flex: 1;
+  height: 8px;
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  align-self: center;
+}
+
+.meter div {
+  height: 100%;
+  background: var(--accent);
+}
+
+/* --- ledger ---------------------------------------------------------- */
+
+.col-head {
+  display: none;
+  padding: 0 32px;
+  min-height: 36px;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.col-head span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.ch-box {
+  width: 28px;
+  flex: none;
+}
+
+.ch-name {
+  flex: 1;
+}
+
+.ch-days {
+  width: 238px;
+  flex: none;
+}
+
+.ch-streak {
+  width: 52px;
+  flex: none;
+  text-align: right;
+}
+
+.ledger {
+  flex: 1;
+  overflow: auto;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--divider);
+  cursor: pointer;
+  user-select: none;
+}
+
+.box {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 2px solid var(--text);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.box.done {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.box:active {
+  border-color: var(--accent-down);
+}
+
+.row-name {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.row-name .name {
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.row-name .note {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.dots {
+  width: 238px;
+  flex: none;
+  display: none;
+  gap: 4px;
+}
+
+.dot {
+  width: 13px;
+  height: 13px;
+  background: var(--surface);
+  border: 1px solid var(--divider);
+}
+
+.dot.done {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.dot.today {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.streak-n {
+  width: 52px;
+  flex: none;
+  text-align: right;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.streak-n.dim {
+  color: var(--dim);
+}
+
+.empty {
+  padding: 40px 20px;
+  color: var(--muted);
+  line-height: 1.5;
+  max-width: 30rem;
+}
+
+/* --- desktop sidebar -------------------------------------------------- */
+
+.side {
+  width: 280px;
+  flex: none;
+  display: none;
+  flex-direction: column;
+  border-left: 2px solid var(--divider);
+}
+
+.side-block {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.side-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.side-pct {
+  font-size: 64px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin-top: 10px;
+  color: var(--accent);
+}
+
+.side-pct span {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.side-note {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 8px;
+  color: var(--muted);
+}
+
+.bars {
+  display: flex;
+  gap: 5px;
+  margin-top: 12px;
+  align-items: flex-end;
+  height: 64px;
+}
+
+.bars > div {
+  flex: 1;
+  background: var(--accent);
+}
+
+.bars > div.today {
+  background: var(--surface);
+  border: 1px solid var(--divider);
+}
+
+.bars-days {
+  display: flex;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.bars-days span {
+  flex: 1;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.bars-days span.today {
+  color: var(--accent);
+}
+
+.best {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.best-n {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.best-name {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* --- sheets ----------------------------------------------------------- */
 
 .overlay {
   position: fixed;
   inset: 0;
   z-index: 10;
-  background: rgba(0, 0, 0, 0.55);
+  background: color-mix(in srgb, var(--text) 50%, transparent);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -96,85 +497,10 @@ h1 {
 .sheet {
   width: 100%;
   max-width: 28rem;
-  background: var(--card);
-  border: 1px solid var(--card-edge);
-  border-bottom: none;
-  border-radius: 1.25rem 1.25rem 0 0;
-  padding: 0.6rem 1rem calc(1.5rem + env(safe-area-inset-bottom));
+  background: var(--bg);
+  border-top: 2px solid var(--text);
+  padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
   animation: rise 0.2s ease-out;
-}
-
-.handle {
-  width: 2.5rem;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--card-edge);
-  margin: 0 auto 0.9rem;
-}
-
-.sheet h2 {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.72rem;
-  font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--chalk-dim);
-  margin-bottom: 0.75rem;
-}
-
-.head-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-/* Desktop add button: hidden on phones, where the floating + rules. */
-.plus {
-  display: none;
-  width: 2.2rem;
-  height: 2.2rem;
-  font: inherit;
-  font-size: 1.4rem;
-  line-height: 1;
-  color: var(--chalk-dim);
-  background: transparent;
-  border: 1px solid var(--card-edge);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease;
-}
-
-.plus:hover {
-  color: var(--chalk);
-  border-color: var(--chalk-dim);
-}
-
-/* Wider than a phone: a FAB is a thumb-reach affordance, so it goes
-   away; adding moves to the header and the sheet becomes a centered
-   dialog. */
-@media (min-width: 640px) {
-  .fab {
-    display: none;
-  }
-
-  .plus {
-    display: block;
-  }
-
-  .overlay {
-    align-items: center;
-    padding: 1rem;
-  }
-
-  .sheet {
-    border-radius: 1.25rem;
-    border-bottom: 1px solid var(--card-edge);
-    padding: 1.5rem 1.25rem;
-  }
-
-  .handle {
-    display: none;
-  }
 }
 
 @keyframes fade {
@@ -190,270 +516,165 @@ h1 {
   }
 }
 
-.add {
+.sheet-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.sheet-name {
+  display: block;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  padding: 0;
+}
+
+.sheet-note {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.sheet-stats {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+.form {
   display: flex;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
 }
 
-.add input {
-  flex: 1;
-  min-width: 0;
+.input {
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 12px;
   font: inherit;
-  font-size: 1rem; /* ≥16px so iOS doesn't zoom on focus */
-  color: var(--chalk);
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--card-edge);
-  border-radius: 0.75rem;
-  padding: 0.8rem 1rem;
+  font-size: 16px; /* ≥16px so iOS doesn't zoom on focus */
+  color: var(--text);
+  caret-color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: 0;
 }
 
-.add input::placeholder {
-  color: var(--chalk-dim);
+.input:focus-visible {
+  border-color: var(--accent);
+  outline-offset: 0;
 }
 
-.add button {
-  font: inherit;
-  font-weight: 700;
-  color: var(--board);
-  background: var(--chalk);
-  border: none;
-  border-radius: 0.75rem;
-  padding: 0 1.25rem;
-  cursor: pointer;
-}
-
-.add button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.empty {
-  color: var(--chalk-dim);
+.btn {
+  min-height: 44px;
+  padding: 0 20px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
   text-align: center;
-  padding: 2.5rem 1rem;
-  line-height: 1.5;
 }
 
-/* --- habit cards -------------------------------------------------- */
-
-.list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+.btn:active {
+  background: var(--accent-down);
 }
 
-.list li {
-  display: flex;
-  gap: 0.5rem;
-  align-items: stretch;
+.btn:disabled {
+  opacity: 0.45;
 }
 
-.card {
-  flex: 1;
-  min-width: 0;
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent), var(--card);
-  border: 1px solid var(--card-edge);
-  border-radius: 1rem;
-  padding: 0.9rem 1rem;
-  cursor: pointer;
-  user-select: none;
-  transition: transform 0.08s ease, filter 0.08s ease;
+.btn-quiet {
+  min-height: 36px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--divider);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-align: center;
 }
 
-/* The habit taking root: a hairline along the bottom edge that grows
-   toward full width over the ~66 days it takes a habit to stick. */
-.root {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  height: 2px;
-  background: var(--moss);
-  opacity: 0.4;
-  transition: width 0.4s ease;
+.btn-quiet:disabled {
+  opacity: 0.35;
 }
 
-.root.rooted {
-  opacity: 0.9;
+.btn-quiet.danger {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
-.card:active {
-  transform: scale(0.98);
-  filter: brightness(1.15);
-}
-
-.card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.name {
-  flex: 1;
-  font-size: 1.1rem;
-  font-weight: 650;
-  /* break-word, not anywhere: min-content stays a whole word, so the
-     tally can never squeeze the name to one letter per line */
-  overflow-wrap: break-word;
-  min-width: 0;
-}
-
-.card-bottom {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 0.65rem;
-}
-
-.week {
-  display: flex;
-  gap: 0.3rem;
-}
-
-.dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  border: 1px solid var(--chalk-dim);
-  opacity: 0.55;
-}
-
-.dot.done {
-  background: var(--moss);
-  border-color: var(--moss);
-  opacity: 1;
-}
-
-.streak {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.75rem;
-  color: var(--amber);
-}
-
-.total {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.75rem;
-  color: var(--chalk-dim);
-  margin-left: auto;
-}
-
-/* --- today's count -------------------------------------------------- */
-
-.count {
-  flex: none;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--amber);
-}
-
-.count.dim {
-  color: var(--chalk-dim);
-  font-weight: 400;
-}
-
-/* --- per-habit actions --------------------------------------------- */
-
-.actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  justify-content: center;
-}
-
-.mini {
-  font: inherit;
-  font-size: 0.8rem;
-  color: var(--chalk-dim);
-  background: transparent;
-  border: 1px solid var(--card-edge);
-  border-radius: 0.6rem;
-  min-width: 2.6rem;
-  padding: 0.35rem 0.5rem;
-  cursor: pointer;
-}
-
-.mini:active {
-  filter: brightness(1.4);
-}
-
-.mini.danger {
-  color: var(--clay);
-  border-color: var(--clay);
-}
-
-/* --- history calendar ---------------------------------------------- */
+/* --- sheet calendar ---------------------------------------------------- */
 
 .cal-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.75rem;
+  margin: 16px 0 10px;
 }
 
 .cal-title {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.8rem;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 0.25rem;
+  gap: 4px;
 }
 
 .cal-wd {
   text-align: center;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.65rem;
-  color: var(--chalk-dim);
-  padding-bottom: 0.15rem;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding-bottom: 2px;
 }
 
 .cal-day {
   aspect-ratio: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  line-height: 1.15;
-  font: inherit;
-  font-size: 0.8rem;
-  color: var(--chalk);
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid transparent;
-  border-radius: 0.55rem;
-  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  text-align: center;
 }
 
-/* Per-day tick count under the day number. Kept at a fixed height even
-   when empty so day numbers align across cells. */
-.cal-n {
-  height: 0.75rem;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.6rem;
-  color: var(--chalk-dim);
-}
-
-/* Enough ticks that the green shading gets bright: flip to dark text. */
-.cal-day.hot {
-  color: var(--board);
-  font-weight: 700;
-}
-
-.cal-day.hot .cal-n {
-  color: var(--board);
+.cal-day.done {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
 }
 
 .cal-day.today {
-  border-color: var(--chalk-dim);
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
 }
 
-.cal-day.sel {
-  border-color: var(--amber);
+.cal-day.locked {
+  cursor: default;
+}
+
+.cal-day.locked:not(.done) {
+  color: var(--muted);
 }
 
 .cal-day.off {
@@ -461,48 +682,70 @@ h1 {
   cursor: default;
 }
 
-.cal-edit {
+.sheet-del {
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-top: 0.9rem;
+  justify-content: flex-start;
+  margin-top: 16px;
 }
 
-.cal-date {
-  flex: 1;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.8rem;
-  color: var(--chalk-dim);
-}
+/* --- desktop (the 2a layout) ------------------------------------------- */
 
-.cal-count {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--amber);
-  min-width: 1.5rem;
-  text-align: center;
-}
+@media (min-width: 900px) {
+  .rail {
+    display: flex;
+  }
 
-.cal-lock {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--chalk-dim);
-}
+  .side {
+    display: flex;
+  }
 
-:focus-visible {
-  outline: 2px solid var(--amber);
-  outline-offset: 2px;
+  .bar {
+    display: none;
+  }
+
+  .col-head {
+    display: flex;
+  }
+
+  .dots {
+    display: flex;
+  }
+
+  .head {
+    padding: 24px 32px 18px;
+  }
+
+  .title {
+    font-size: 52px;
+  }
+
+  .head-score {
+    gap: 24px;
+    margin-top: 6px;
+  }
+
+  .score {
+    font-size: 28px;
+  }
+
+  .row {
+    padding: 0 32px;
+  }
+
+  .overlay {
+    align-items: center;
+    padding: 16px;
+  }
+
+  .sheet {
+    border: 2px solid var(--text);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card,
-  .fab,
   .overlay,
   .sheet,
-  .root {
+  .meter div {
     animation: none;
     transition: none;
   }
