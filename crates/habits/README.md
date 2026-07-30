@@ -48,3 +48,26 @@ it launches and works with no connectivity. Archivo is vendored under
 
 Caveats of being fully client-side: data is per-device (no sync), and
 clearing the browser's site data deletes it.
+
+## Android APK
+
+The devenv shell carries the whole toolchain (SDK 34, NDK, Java, an
+Android-target rustc). From `crates/habits`:
+
+```sh
+dx build --platform android --release --target aarch64-linux-android
+find ../../target/dx/habits -name '*.apk'
+```
+
+The explicit `--target` matters: without it dx assumes an emulator
+(x86_64) and tries to rustup-install that target, which the nix
+toolchain can't do. The APK lands under
+`target/dx/habits/release/android/.../outputs/apk/debug/app-debug.apk` —
+Gradle's *debug variant*, but the Rust inside is the release build, and
+it's debug-signed, which is exactly what sideloading wants.
+
+Install: `adb install <apk>` (USB debugging), or copy the file to the
+phone and open it (allow "install unknown apps"). Storage on Android is
+JSON files in the app's private data dir (see `src/persist.rs`) — data
+is per-device, deleted with the app, and separate from any web/PWA
+instance.

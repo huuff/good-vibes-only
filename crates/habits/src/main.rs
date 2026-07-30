@@ -1,3 +1,4 @@
+mod persist;
 mod store;
 mod ui;
 
