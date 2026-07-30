@@ -1,0 +1,18 @@
+[package]
+name = "llm-usage"
+version.workspace = true
+edition.workspace = true
+description = "Detect installed LLM coding CLIs (Claude Code, Codex) and print their usage limits"
+license.workspace = true
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+colored = "3.1.1"
+jiff = { version = "0.2", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2", features = ["json"] }
+
+[dev-dependencies]
+tempfile = "3"
