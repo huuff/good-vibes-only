@@ -41,7 +41,8 @@ fn month_cells(month: NaiveDate) -> Vec<Option<NaiveDate>> {
     cells
 }
 
-/// Month calendar for one habit: per-day tick counts as green shading, plus
+/// Month calendar for one habit: per-day tick counts shown in each cell and
+/// as green shading, plus
 /// a − / + stepper to correct the last [`crate::store::EDIT_WINDOW_DAYS`]
 /// days. Older days are view-only.
 fn calendar_sheet(
@@ -97,7 +98,12 @@ fn calendar_sheet(
                     disabled: day > today,
                     title: "{count} × {day}",
                     onclick: move |_| sel.set(Some(day)),
-                    "{day.day()}"
+                    span { class: "cal-dom", "{day.day()}" }
+                    span { class: "cal-n",
+                        if count > 0 {
+                            "{count}"
+                        }
+                    }
                 }
             }
         })

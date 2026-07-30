@@ -415,6 +415,11 @@ h1 {
 
 .cal-day {
   aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.15;
   font: inherit;
   font-size: 0.8rem;
   color: var(--chalk);
@@ -424,10 +429,23 @@ h1 {
   cursor: pointer;
 }
 
+/* Per-day tick count under the day number. Kept at a fixed height even
+   when empty so day numbers align across cells. */
+.cal-n {
+  height: 0.75rem;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.6rem;
+  color: var(--chalk-dim);
+}
+
 /* Enough ticks that the green shading gets bright: flip to dark text. */
 .cal-day.hot {
   color: var(--board);
   font-weight: 700;
+}
+
+.cal-day.hot .cal-n {
+  color: var(--board);
 }
 
 .cal-day.today {
