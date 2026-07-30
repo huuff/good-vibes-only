@@ -1,11 +1,12 @@
-//! Habit data and persistence. Everything lives in the browser's
-//! localStorage — the app is fully client-side and works offline.
+//! Habit data and persistence. Storage goes through [`crate::persist`]
+//! (localStorage on web, files in the app data dir on Android/native) —
+//! the app is fully client-side and works offline.
 //!
 //! Storage schema v2: each habit is a set of days it was done (binary —
 //! either a day counts or it doesn't) plus an optional free-text note.
 
+use crate::persist;
 use chrono::{Days, Local, NaiveDate};
-use gloo_storage::{LocalStorage, Storage};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -127,15 +128,13 @@ pub struct Data {
 
 impl Data {
     pub fn load() -> Self {
-        if let Ok(data) = LocalStorage::get(KEY) {
+        if let Some(data) = persist::get(KEY) {
             return data;
         }
         // First run on v2: migrate v1 if present, else start empty. The
         // save "commits" the migration; if it fails, we just re-migrate
-        // on the next load.
-        let migrated: Self = LocalStorage::get(V1_KEY)
-            .map(Self::from_v1)
-            .unwrap_or_default();
+        // on the next load. (On Android the v1 key never exists.)
+        let migrated: Self = persist::get(V1_KEY).map(Self::from_v1).unwrap_or_default();
         if !migrated.habits.is_empty() {
             migrated.save();
         }
@@ -166,9 +165,7 @@ impl Data {
     }
 
     pub fn save(&self) {
-        // Ignoring the error: quota exhaustion is the only realistic failure,
-        // and there is nowhere better to report it than the next page load.
-        let _ = LocalStorage::set(KEY, self);
+        persist::set(KEY, self);
     }
 
     pub fn add(&mut self, name: &str, note: &str) {
