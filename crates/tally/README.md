@@ -1,4 +1,4 @@
-# habits (TALLY)
+# tally
 
 Habit-ledger PWA built with Dioxus (web/wasm). Fully client-side: habits
 and their done-days live in the browser's localStorage, so the app works
@@ -24,11 +24,11 @@ is left in place as a backup.
 ## Develop
 
 ```sh
-dx serve            # from crates/habits; hot-reloading dev server
+dx serve            # from crates/tally; hot-reloading dev server
 ```
 
 `dx` is in the devenv shell. Unit tests for the date math run natively:
-`cargo test -p habits`.
+`cargo test -p tally`.
 
 ## Ship
 
@@ -39,7 +39,7 @@ HTTPS origins (localhost is exempt, LAN IPs are not). So: build, drop the
 
 ```sh
 dx build --release
-cp web/* target/dx/habits/release/web/public/
+cp web/* target/dx/tally/release/web/public/
 ```
 
 Then open the URL on the phone once, and "Add to Home Screen". From then on
@@ -52,17 +52,17 @@ clearing the browser's site data deletes it.
 ## Android APK
 
 The devenv shell carries the whole toolchain (SDK 34, NDK, Java, an
-Android-target rustc). From `crates/habits`:
+Android-target rustc). From `crates/tally`:
 
 ```sh
 dx build --platform android --release --target aarch64-linux-android
-find ../../target/dx/habits -name '*.apk'
+find ../../target/dx/tally -name '*.apk'
 ```
 
 The explicit `--target` matters: without it dx assumes an emulator
 (x86_64) and tries to rustup-install that target, which the nix
 toolchain can't do. The APK lands under
-`target/dx/habits/release/android/.../outputs/apk/debug/app-debug.apk` —
+`target/dx/tally/release/android/.../outputs/apk/debug/app-debug.apk` —
 Gradle's *debug variant*, but the Rust inside is the release build, and
 it's debug-signed, which is exactly what sideloading wants.
 

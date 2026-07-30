@@ -1,7 +1,7 @@
 // Stale-while-revalidate: serve from cache immediately (works offline),
 // refresh the cache in the background. dx hashes asset filenames, so a new
 // deploy's index.html pulls new URLs and old entries just go stale.
-const CACHE = "habits-v1";
+const CACHE = "tally-v1";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

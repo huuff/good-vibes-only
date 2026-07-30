@@ -77,7 +77,7 @@ mod backend {
 
     #[cfg(not(target_os = "android"))]
     fn data_dir() -> PathBuf {
-        std::env::var_os("HABITS_DATA_DIR")
+        std::env::var_os("TALLY_DATA_DIR")
             .map(Into::into)
             .unwrap_or_else(|| PathBuf::from("."))
     }
@@ -97,10 +97,10 @@ mod tests {
 
     #[test]
     fn file_backend_round_trips() {
-        let dir = std::env::temp_dir().join(format!("habits-persist-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("tally-persist-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         // SAFETY: the only test (and only code) mutating the environment.
-        unsafe { std::env::set_var("HABITS_DATA_DIR", &dir) };
+        unsafe { std::env::set_var("TALLY_DATA_DIR", &dir) };
 
         assert_eq!(get::<Vec<u32>>("habits/test"), None);
         set("habits/test", &vec![1u32, 2, 3]);

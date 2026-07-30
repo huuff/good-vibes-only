@@ -1,4 +1,4 @@
-# habits — deferred issues (TALLY redesign, 2026-07-30)
+# tally — deferred issues (TALLY redesign, 2026-07-30)
 
 Known-but-accepted items from the TALLY redesign. Each was reviewed and
 triaged as OK-to-defer; none block the release. Salvaged from the
@@ -10,7 +10,7 @@ Spec: `docs/superpowers/specs/2026-07-30-habits-tally-redesign-design.md`
 ## Time and clock
 
 - **Store tests depend on the wall clock.** Nearly every test in
-  `crates/habits/src/store.rs` builds dates from `Local::now()` (and the
+  `crates/tally/src/store.rs` builds dates from `Local::now()` (and the
   API itself does — `done_today`, `streak`, `history`). Nothing injects a
   clock, so tests can behave differently across a midnight boundary or in
   another timezone. Fixing it means threading a clock/`today` parameter

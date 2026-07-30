@@ -16,7 +16,7 @@
   };
   languages.nix.enable = true;
 
-  # Android SDK/NDK for `dx build --platform android` (crates/habits).
+  # Android SDK/NDK for `dx build --platform android` (crates/tally).
   # Emulator off: the target is a physical phone.
   android = {
     enable = true;
@@ -31,7 +31,7 @@
   env.ANDROID_NDK_HOME = config.env.ANDROID_NDK_ROOT;
   env.NDK_HOME = config.env.ANDROID_NDK_ROOT;
 
-  # dx builds/serves the Dioxus web crates (crates/habits); linking wasm
+  # dx builds/serves the Dioxus web crates (crates/tally); linking wasm
   # needs lld.
   packages = [
     pkgs.dioxus-cli
