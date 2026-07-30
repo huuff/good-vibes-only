@@ -1,14 +1,38 @@
 # Add `lib` etc. to the lambda args when first needed (deadnix rejects
 # unused args, statix rejects empty `{ ... }` patterns — use `_:` if no
 # args remain).
-{ pkgs, ... }:
+{ pkgs, config, ... }:
 
 {
-  languages.rust.enable = true;
+  # rust-overlay channel instead of nixpkgs' rustc: extra targets (the
+  # nixpkgs toolchain only ships wasm32 std, and Android needs its own).
+  languages.rust = {
+    enable = true;
+    channel = "stable";
+    targets = [
+      "wasm32-unknown-unknown"
+      "aarch64-linux-android"
+    ];
+  };
   languages.nix.enable = true;
 
-  # dx builds/serves the Dioxus web crates (crates/habits); the wasm32 std
-  # already ships with nixpkgs' rustc, but linking wasm needs lld.
+  # Android SDK/NDK for `dx build --platform android` (crates/habits).
+  # Emulator off: the target is a physical phone.
+  android = {
+    enable = true;
+    ndk.enable = true;
+    emulator.enable = false;
+    platforms.version = [ "34" ];
+    buildTools.version = [ "34.0.0" ];
+  };
+
+  # dx/Gradle look for the NDK under these names; devenv only exports
+  # ANDROID_NDK_ROOT.
+  env.ANDROID_NDK_HOME = config.env.ANDROID_NDK_ROOT;
+  env.NDK_HOME = config.env.ANDROID_NDK_ROOT;
+
+  # dx builds/serves the Dioxus web crates (crates/habits); linking wasm
+  # needs lld.
   packages = [
     pkgs.dioxus-cli
     pkgs.lld

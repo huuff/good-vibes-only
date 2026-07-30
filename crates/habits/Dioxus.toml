@@ -1,0 +1,5 @@
+[application]
+
+[bundle]
+identifier = "com.huuff.habits"
+publisher = "huuff"

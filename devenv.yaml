@@ -1,8 +1,17 @@
+# Android SDK/NDK packages are unfree-licensed.
+allowUnfree: true
+
 inputs:
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
   git-hooks:
     url: github:cachix/git-hooks.nix
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
+  # for languages.rust.channel (extra targets: wasm32, android)
+  rust-overlay:
+    url: github:oxalica/rust-overlay
     inputs:
       nixpkgs:
         follows: nixpkgs
