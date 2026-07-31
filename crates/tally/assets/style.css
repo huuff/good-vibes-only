@@ -683,7 +683,9 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 0 14px;
+  padding: 6px 14px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .opt.on {
@@ -709,73 +711,55 @@ button:disabled {
 .opt-label {
   font-size: 16px;
   font-weight: 600;
-}
-
-.opt-num {
-  font-weight: 800;
-  padding: 0 2px;
-}
-
-.opt.on .opt-num {
-  color: var(--accent);
-}
-
-.opt-panel {
-  display: flex;
-  background: var(--surface);
-}
-
-.step {
-  flex: 1;
-  min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 14px;
+  flex-wrap: wrap;
+  gap: 2px;
 }
 
-.step + .step {
-  border-left: 1px solid var(--divider);
-}
-
-.step-label {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  color: var(--muted);
-}
-
-.stepper {
-  display: flex;
+/* Inline −/+ number stepper, visible whether or not the row is
+   selected — the numbers must read as adjustable at a glance. */
+.num-step {
+  display: inline-flex;
   align-items: center;
+  margin: 0 6px;
 }
 
-.stepper button {
-  width: 36px;
-  height: 36px;
+.num-step button {
+  width: 30px;
+  height: 30px;
   border: 2px solid var(--text);
+  background: var(--bg);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
 }
 
-.stepper button:disabled {
+.num-step button:active {
+  background: var(--surface);
+}
+
+.num-step button:disabled {
   opacity: 0.35;
 }
 
-.stepper .step-val {
-  width: 40px;
-  height: 36px;
+.num-step .num-val {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 4px;
   border-top: 2px solid var(--text);
   border-bottom: 2px solid var(--text);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
+}
+
+.opt.on .num-val {
+  color: var(--accent);
 }
 
 .opt-hint {

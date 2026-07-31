@@ -1,6 +1,7 @@
 //! The HOW OFTEN? schedule picker (design option 3a): four choices —
 //! every day, every N days, N times per week, N times in M days — with
-//! −/+ steppers for the numbers and a hint line explaining the pick.
+//! always-visible inline −/+ steppers for the numbers (so it's obvious
+//! at a glance they're adjustable) and a hint line explaining the pick.
 
 use dioxus::prelude::*;
 
@@ -115,48 +116,65 @@ fn check() -> Element {
     }
 }
 
-/// A − value + row, clamped to `min..=max`.
-fn stepper(
-    label: &'static str,
+/// An inline −/+ stepper, clamped to `min..=max`. Adjusting a number
+/// also selects its row (its clicks don't bubble to the row, so the
+/// selection is set here).
+fn num_stepper(
+    mut draft: Signal<ScheduleDraft>,
+    kind: Kind,
     value: u32,
     min: u32,
     max: u32,
-    set: impl FnMut(u32) + Clone + 'static,
+    set: impl Fn(&mut ScheduleDraft, u32) + Copy + 'static,
 ) -> Element {
-    let mut dec = set.clone();
-    let mut inc = set;
     rsx! {
-        div { class: "step",
-            span { class: "step-label", "{label}" }
-            div { class: "stepper",
-                button {
-                    aria_label: "Fewer {label}",
-                    disabled: value <= min,
-                    onclick: move |_| dec(value.saturating_sub(1).max(min)),
-                    "−"
-                }
-                span { class: "step-val", "{value}" }
-                button {
-                    aria_label: "More {label}",
-                    disabled: value >= max,
-                    onclick: move |_| inc((value + 1).min(max)),
-                    "+"
-                }
+        span { class: "num-step",
+            button {
+                aria_label: "Decrease",
+                disabled: value <= min,
+                onclick: move |e| {
+                    e.stop_propagation();
+                    draft.with_mut(|d| {
+                        set(d, value.saturating_sub(1).max(min));
+                        d.kind = kind;
+                    });
+                },
+                "−"
+            }
+            span { class: "num-val", "{value}" }
+            button {
+                aria_label: "Increase",
+                disabled: value >= max,
+                onclick: move |e| {
+                    e.stop_propagation();
+                    draft.with_mut(|d| {
+                        set(d, (value + 1).min(max));
+                        d.kind = kind;
+                    });
+                },
+                "+"
             }
         }
     }
 }
 
-/// One selectable option row. The numeric panel, if any, is rendered by
-/// the caller right below the selected row (buttons don't nest).
+/// One selectable option row. A div rather than a button so the inline
+/// steppers (buttons) can nest inside.
 fn option_row(mut draft: Signal<ScheduleDraft>, kind: Kind, label: Element) -> Element {
     let on = draft().kind == kind;
     rsx! {
-        button {
+        div {
             class: if on { "opt on" } else { "opt" },
             role: "radio",
             aria_checked: on,
+            tabindex: "0",
             onclick: move |_| draft.with_mut(|d| d.kind = kind),
+            onkeydown: move |e| {
+                if e.key() == Key::Enter || e.key() == Key::Character(" ".into()) {
+                    e.prevent_default();
+                    draft.with_mut(|d| d.kind = kind);
+                }
+            },
             span { class: "opt-box",
                 if on {
                     {check()}
@@ -167,7 +185,7 @@ fn option_row(mut draft: Signal<ScheduleDraft>, kind: Kind, label: Element) -> E
     }
 }
 
-pub fn schedule_picker(mut draft: Signal<ScheduleDraft>) -> Element {
+pub fn schedule_picker(draft: Signal<ScheduleDraft>) -> Element {
     let d = draft();
     rsx! {
         div { class: "how-label", "HOW OFTEN?" }
@@ -178,20 +196,15 @@ pub fn schedule_picker(mut draft: Signal<ScheduleDraft>) -> Element {
                 Kind::EveryN,
                 rsx! {
                     "Every "
-                    span { class: "opt-num", "{d.every_n}" }
+                    {num_stepper(draft, Kind::EveryN, d.every_n, 2, 90, |d, v| d.every_n = v)}
                     " days"
                 },
             )}
-            if d.kind == Kind::EveryN {
-                div { class: "opt-panel",
-                    {stepper("DAYS", d.every_n, 2, 90, move |v| draft.with_mut(|d| d.every_n = v))}
-                }
-            }
             {option_row(
                 draft,
                 Kind::PerWeek,
                 rsx! {
-                    span { class: "opt-num", "{d.per_week}" }
+                    {num_stepper(draft, Kind::PerWeek, d.per_week, 1, 7, |d, v| d.per_week = v)}
                     if d.per_week == 1 {
                         " time per week"
                     } else {
@@ -199,49 +212,30 @@ pub fn schedule_picker(mut draft: Signal<ScheduleDraft>) -> Element {
                     }
                 },
             )}
-            if d.kind == Kind::PerWeek {
-                div { class: "opt-panel",
-                    {stepper("TIMES", d.per_week, 1, 7, move |v| draft.with_mut(|d| d.per_week = v))}
-                }
-            }
             {option_row(
                 draft,
                 Kind::InDays,
                 rsx! {
-                    span { class: "opt-num", "{d.times}" }
+                    {num_stepper(draft, Kind::InDays, d.times, 1, d.window, |d, v| d.times = v)}
                     if d.times == 1 {
                         " time in "
                     } else {
                         " times in "
                     }
-                    span { class: "opt-num", "{d.window}" }
-                    " days"
-                },
-            )}
-            if d.kind == Kind::InDays {
-                div { class: "opt-panel",
-                    {stepper(
-                        "TIMES",
-                        d.times,
-                        1,
-                        d.window,
-                        move |v| draft.with_mut(|d| d.times = v),
-                    )}
-                    {stepper(
-                        "DAYS",
+                    {num_stepper(
+                        draft,
+                        Kind::InDays,
                         d.window,
                         2,
                         90,
-                        move |v| {
-                            draft
-                                .with_mut(|d| {
-                                    d.window = v;
-                                    d.times = d.times.min(v);
-                                })
+                        |d, v| {
+                            d.window = v;
+                            d.times = d.times.min(v);
                         },
                     )}
-                }
-            }
+                    " days"
+                },
+            )}
         }
         div { class: "opt-hint", {d.hint()} }
     }
