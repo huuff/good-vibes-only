@@ -52,7 +52,9 @@ clearing the browser's site data deletes it.
 ## Android APK
 
 The devenv shell carries the whole toolchain (SDK 34, NDK, Java, an
-Android-target rustc). From `crates/tally`:
+Android-target rustc). One-shot build + install onto a USB-connected
+phone (USB debugging on): `devenv tasks run tally:android:install`.
+Or by hand, from `crates/tally`:
 
 ```sh
 dx build --platform android --release --target aarch64-linux-android

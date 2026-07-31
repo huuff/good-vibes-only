@@ -38,6 +38,20 @@
     pkgs.lld
   ];
 
+  # Build the tally APK and sideload it onto a USB-connected phone
+  # (USB debugging on). The explicit --target matters: without it dx
+  # assumes an emulator (x86_64) and tries to rustup-install that
+  # target, which the nix toolchain can't do.
+  tasks."tally:android:install" = {
+    description = "Build the tally APK and install it on a USB-connected phone";
+    exec = ''
+      cd "$DEVENV_ROOT/crates/tally"
+      dx build --platform android --release --target aarch64-linux-android
+      apk=$(find "$DEVENV_ROOT/target/dx/tally" -name '*.apk' | head -n1)
+      adb install -r "$apk"
+    '';
+  };
+
   git-hooks.hooks = {
     # --- secrets: never commit credentials ---
     ripsecrets.enable = true; # scans staged changes for API keys/tokens
