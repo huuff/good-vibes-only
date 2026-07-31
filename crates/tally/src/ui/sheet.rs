@@ -93,7 +93,7 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
         .collect();
 
     rsx! {
-        div { class: "overlay", onclick: move |_| overlays.detail.set(None),
+        div { class: "overlay", onclick: move |_| overlays.dismiss(),
             div {
                 class: "sheet",
                 role: "dialog",
@@ -105,7 +105,7 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                 },
                 onkeydown: move |e| {
                     if e.key() == Key::Escape {
-                        overlays.detail.set(None);
+                        overlays.dismiss();
                     }
                 },
                 div { class: "sheet-label", "Habit" }
@@ -196,7 +196,7 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                             class: "btn-quiet danger",
                             title: "Really delete",
                             onclick: move |_| {
-                                overlays.detail.set(None);
+                                overlays.dismiss();
                                 data.with_mut(|d| {
                                     d.delete(id);
                                     d.save();
@@ -232,11 +232,11 @@ pub fn add_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
             d.add(&name, &(overlays.note_draft)());
             d.save();
         });
-        overlays.adding.set(false);
+        overlays.dismiss();
     };
 
     rsx! {
-        div { class: "overlay", onclick: move |_| overlays.adding.set(false),
+        div { class: "overlay", onclick: move |_| overlays.dismiss(),
             div {
                 class: "sheet",
                 role: "dialog",
@@ -248,7 +248,7 @@ pub fn add_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                 },
                 onkeydown: move |e| {
                     if e.key() == Key::Escape {
-                        overlays.adding.set(false);
+                        overlays.dismiss();
                     }
                 },
                 div { class: "sheet-label", "New habit" }
@@ -267,7 +267,7 @@ pub fn add_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                             if e.key() == Key::Enter {
                                 add();
                             } else if e.key() == Key::Escape {
-                                overlays.adding.set(false);
+                                overlays.dismiss();
                             }
                         },
                     }
@@ -282,7 +282,7 @@ pub fn add_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                             if e.key() == Key::Enter {
                                 add();
                             } else if e.key() == Key::Escape {
-                                overlays.adding.set(false);
+                                overlays.dismiss();
                             }
                         },
                     }
