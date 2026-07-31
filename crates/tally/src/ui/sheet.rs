@@ -38,7 +38,20 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
         .with_day(1)
         .expect("every month has a day 1");
     let this_month = today.with_day(1).expect("every month has a day 1");
-    let name = habit.name.clone();
+    // Entering edit mode, shared by the name button and the schedule
+    // chip — both edit the same form.
+    let mut start_edit = {
+        let name = habit.name.clone();
+        let schedule = habit.schedule;
+        move || {
+            overlays.name_draft.set(name.clone());
+            overlays
+                .sched_draft
+                .set(ScheduleDraft::from_schedule(schedule));
+            overlays.editing.set(true);
+        }
+    };
+    let mut start_edit2 = start_edit.clone();
 
     let mut save = move || {
         if (overlays.name_draft)().trim().is_empty() {
@@ -140,15 +153,17 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                     button {
                         class: "sheet-name",
                         title: "Edit name and schedule",
-                        onclick: move |_| {
-                            overlays.name_draft.set(name.clone());
-                            overlays.sched_draft.set(ScheduleDraft::from_schedule(habit.schedule));
-                            overlays.editing.set(true);
-                        },
+                        onclick: move |_| start_edit(),
                         "{habit.name} ✎"
                     }
+                    button {
+                        class: "sheet-sched",
+                        title: "Change schedule",
+                        onclick: move |_| start_edit2(),
+                        "{habit.schedule.label()} ✎"
+                    }
                     div { class: "sheet-stats",
-                        "Streak {habit.streak()} · best {habit.best_streak()} · {habit.schedule.label()}"
+                        "Streak {habit.streak()} · best {habit.best_streak()}"
                     }
                 }
                 div { class: "cal-nav",
