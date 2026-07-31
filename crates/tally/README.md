@@ -15,8 +15,7 @@ docs/superpowers/specs/2026-07-30-habits-tally-redesign-design.md).
 Days are binary: done or not. The checkbox toggles today; tapping the rest
 of the row opens a detail sheet with a month calendar (the last 7 days can
 be corrected there — forgot to log, logged by mistake…; older days are
-view-only), name/note/schedule editing, and delete behind a two-tap
-confirm.
+view-only), name/schedule editing, and delete behind a two-tap confirm.
 
 Habits don't have to be daily (design turn 3, Loop Habit Tracker's
 model): a schedule is every day, every N days, N times per calendar week

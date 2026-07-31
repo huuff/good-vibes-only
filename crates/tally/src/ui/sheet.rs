@@ -1,7 +1,6 @@
 //! Overlay sheets: the per-habit detail (month calendar with binary
-//! toggling inside the edit window, name/note/schedule editing, delete
-//! behind a two-tap confirm) and the add-habit form with its schedule
-//! picker.
+//! toggling inside the edit window, name/schedule editing, delete behind
+//! a two-tap confirm) and the add-habit form with its schedule picker.
 
 use chrono::{Datelike, Local, Months, NaiveDate};
 use dioxus::prelude::*;
@@ -40,7 +39,6 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
         .expect("every month has a day 1");
     let this_month = today.with_day(1).expect("every month has a day 1");
     let name = habit.name.clone();
-    let note = habit.note.clone();
 
     let mut save = move || {
         if (overlays.name_draft)().trim().is_empty() {
@@ -48,7 +46,6 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
         }
         data.with_mut(|d| {
             d.rename(id, &(overlays.name_draft)());
-            d.set_note(id, &(overlays.note_draft)());
             d.set_schedule(id, (overlays.sched_draft)().schedule());
             d.save();
         });
@@ -131,21 +128,6 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                                 }
                             },
                         }
-                        input {
-                            class: "input",
-                            value: "{overlays.note_draft}",
-                            placeholder: "Note — e.g. 06:30 · 5 KM",
-                            enterkeyhint: "done",
-                            oninput: move |e| overlays.note_draft.set(e.value()),
-                            onkeydown: move |e| {
-                                e.stop_propagation();
-                                if e.key() == Key::Enter {
-                                    save();
-                                } else if e.key() == Key::Escape {
-                                    overlays.editing.set(false);
-                                }
-                            },
-                        }
                         {schedule_picker(overlays.sched_draft)}
                         button {
                             class: "btn",
@@ -157,17 +139,13 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                 } else {
                     button {
                         class: "sheet-name",
-                        title: "Edit name, note and schedule",
+                        title: "Edit name and schedule",
                         onclick: move |_| {
                             overlays.name_draft.set(name.clone());
-                            overlays.note_draft.set(note.clone());
                             overlays.sched_draft.set(ScheduleDraft::from_schedule(habit.schedule));
                             overlays.editing.set(true);
                         },
                         "{habit.name} ✎"
-                    }
-                    if !habit.note.is_empty() {
-                        div { class: "sheet-note", "{habit.note}" }
                     }
                     div { class: "sheet-stats",
                         "Streak {habit.streak()} · best {habit.best_streak()} · {habit.schedule.label()}"
@@ -234,11 +212,7 @@ pub fn add_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
             return;
         }
         data.with_mut(|d| {
-            d.add(
-                &name,
-                &(overlays.note_draft)(),
-                (overlays.sched_draft)().schedule(),
-            );
+            d.add(&name, (overlays.sched_draft)().schedule());
             d.save();
         });
         overlays.dismiss();
@@ -271,21 +245,6 @@ pub fn add_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                             let _ = e.data().set_focus(true).await;
                         },
                         oninput: move |e| overlays.name_draft.set(e.value()),
-                        onkeydown: move |e| {
-                            e.stop_propagation();
-                            if e.key() == Key::Enter {
-                                add();
-                            } else if e.key() == Key::Escape {
-                                overlays.dismiss();
-                            }
-                        },
-                    }
-                    input {
-                        class: "input",
-                        value: "{overlays.note_draft}",
-                        placeholder: "Note (optional) — e.g. 06:30 · 5 KM",
-                        enterkeyhint: "done",
-                        oninput: move |e| overlays.note_draft.set(e.value()),
                         onkeydown: move |e| {
                             e.stop_propagation();
                             if e.key() == Key::Enter {

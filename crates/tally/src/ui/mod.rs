@@ -53,10 +53,9 @@ pub struct Overlays {
     pub adding: Signal<bool>,
     /// Calendar month shown in the detail sheet.
     pub month: Signal<NaiveDate>,
-    /// Name/note edit mode inside the detail sheet.
+    /// Name/schedule edit mode inside the detail sheet.
     pub editing: Signal<bool>,
     pub name_draft: Signal<String>,
-    pub note_draft: Signal<String>,
     /// Schedule picker state for the add form and the edit mode.
     pub sched_draft: Signal<ScheduleDraft>,
     /// Delete confirm armed.
@@ -74,7 +73,6 @@ impl Overlays {
 
     pub fn open_add(&mut self) {
         self.name_draft.set(String::new());
-        self.note_draft.set(String::new());
         self.sched_draft.set(ScheduleDraft::default());
         self.adding.set(true);
         push_history_entry();
@@ -106,7 +104,6 @@ pub fn app() -> Element {
         month: use_signal(|| Local::now().date_naive()),
         editing: use_signal(|| false),
         name_draft: use_signal(String::new),
-        note_draft: use_signal(String::new),
         sched_draft: use_signal(ScheduleDraft::default),
         confirm: use_signal(|| false),
     };

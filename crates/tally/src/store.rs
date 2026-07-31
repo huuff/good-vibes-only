@@ -3,7 +3,9 @@
 //! the app is fully client-side and works offline.
 //!
 //! Storage schema v2: each habit is a set of days it was done (binary —
-//! either a day counts or it doesn't) plus an optional free-text note.
+//! either a day counts or it doesn't) plus a schedule. A free-text note
+//! used to exist; the schedule line replaced it, and any stored note is
+//! now ignored (and dropped on the next save).
 
 use crate::persist;
 use chrono::{Datelike, Days, Local, NaiveDate};
@@ -87,10 +89,6 @@ fn week_start(day: NaiveDate) -> NaiveDate {
 pub struct Habit {
     pub id: u64,
     pub name: String,
-    /// Optional meta line shown under the name ("06:30 · 5 KM"). Empty
-    /// means none.
-    #[serde(default)]
-    pub note: String,
     /// How often. Absent in data written before schedules existed, so it
     /// defaults to daily — which is what every habit effectively was.
     #[serde(default)]
@@ -180,9 +178,9 @@ impl Habit {
         streak
     }
 
-    /// The ledger's second line: the note (or EVERY DAY) for daily
-    /// habits, otherwise schedule + progress. True asks for the accent
-    /// color (an in-progress flexible target).
+    /// The ledger's second line: the schedule, with progress where the
+    /// target is flexible. True asks for the accent color (an
+    /// in-progress flexible target).
     pub fn status_on(&self, day: NaiveDate) -> (String, bool) {
         let next = || {
             self.next_due(day)
@@ -198,8 +196,7 @@ impl Habit {
             .period_start(day)
             .map_or(0, |start| self.count_between(start, day));
         match self.schedule {
-            Schedule::Daily if self.note.is_empty() => ("EVERY DAY".into(), false),
-            Schedule::Daily => (self.note.clone(), false),
+            Schedule::Daily => ("EVERY DAY".into(), false),
             Schedule::EveryNDays { .. } if self.satisfied_on(day) && !self.done_on(day) => {
                 (format!("{}{}", self.schedule.label(), next()), false)
             }
@@ -279,7 +276,6 @@ impl Data {
                 .map(|h| Habit {
                     id: h.id,
                     name: h.name,
-                    note: String::new(),
                     schedule: Schedule::Daily,
                     days: h
                         .ticks
@@ -295,7 +291,7 @@ impl Data {
         persist::set(KEY, self);
     }
 
-    pub fn add(&mut self, name: &str, note: &str, schedule: Schedule) {
+    pub fn add(&mut self, name: &str, schedule: Schedule) {
         let name = name.trim();
         if name.is_empty() {
             return;
@@ -303,7 +299,6 @@ impl Data {
         self.habits.push(Habit {
             id: self.next_id,
             name: name.to_string(),
-            note: note.trim().to_string(),
             schedule,
             days: BTreeSet::new(),
         });
@@ -330,13 +325,6 @@ impl Data {
         }
         if let Some(habit) = self.habits.iter_mut().find(|h| h.id == id) {
             habit.name = name.to_string();
-        }
-    }
-
-    /// Set the note; an empty (or whitespace) note clears it.
-    pub fn set_note(&mut self, id: u64, note: &str) {
-        if let Some(habit) = self.habits.iter_mut().find(|h| h.id == id) {
-            habit.note = note.trim().to_string();
         }
     }
 
@@ -428,7 +416,6 @@ mod tests {
         Habit {
             id: 0,
             name: "test".into(),
-            note: String::new(),
             schedule: Schedule::Daily,
             days: days_back.iter().map(|&b| day(b)).collect(),
         }
@@ -442,7 +429,6 @@ mod tests {
         Habit {
             id: 0,
             name: "test".into(),
-            note: String::new(),
             schedule,
             days: days.iter().copied().collect(),
         }
@@ -494,7 +480,7 @@ mod tests {
     #[test]
     fn toggle_flips_within_window_only() {
         let mut data = Data::default();
-        data.add("t", "", Schedule::Daily);
+        data.add("t", Schedule::Daily);
         let id = data.habits[0].id;
         let today = Local::now().date_naive();
 
@@ -521,19 +507,18 @@ mod tests {
     }
 
     #[test]
-    fn add_trims_name_and_note_and_rejects_empty_names() {
+    fn add_trims_the_name_and_rejects_empty_names() {
         let mut data = Data::default();
-        data.add("  Run  ", "  06:30 · 5 KM  ", Schedule::Daily);
-        data.add("   ", "note", Schedule::Daily);
+        data.add("  Run  ", Schedule::Daily);
+        data.add("   ", Schedule::Daily);
         assert_eq!(data.habits.len(), 1);
         assert_eq!(data.habits[0].name, "Run");
-        assert_eq!(data.habits[0].note, "06:30 · 5 KM");
     }
 
     #[test]
-    fn rename_and_set_note() {
+    fn rename_trims_and_rejects_empty() {
         let mut data = Data::default();
-        data.add("Stretch", "", Schedule::Daily);
+        data.add("Stretch", Schedule::Daily);
         let id = data.habits[0].id;
 
         data.rename(id, "  Morning stretch  ");
@@ -542,21 +527,14 @@ mod tests {
         data.rename(id, "   ");
         assert_eq!(data.habits[0].name, "Morning stretch");
 
-        data.set_note(id, "  EVENING ");
-        assert_eq!(data.habits[0].note, "EVENING");
-        // But an empty note is a valid way to clear it.
-        data.set_note(id, "  ");
-        assert_eq!(data.habits[0].note, "");
-
         // Unknown id: no-op, no panic.
         data.rename(id + 1, "Other");
-        data.set_note(id + 1, "x");
     }
 
     #[test]
     fn delete_removes_the_habit() {
         let mut data = Data::default();
-        data.add("Stretch", "", Schedule::Daily);
+        data.add("Stretch", Schedule::Daily);
         let id = data.habits[0].id;
         data.delete(id);
         assert!(data.habits.is_empty());
@@ -583,10 +561,7 @@ mod tests {
         let data = Data::from_v1(old);
         assert_eq!(data.habits.len(), 2);
         let run = &data.habits[0];
-        assert_eq!(
-            (run.id, run.name.as_str(), run.note.as_str()),
-            (3, "Run", "")
-        );
+        assert_eq!((run.id, run.name.as_str()), (3, "Run"));
         assert_eq!(run.days.len(), 2);
         assert!(run.done_today() && run.done_on(day(2)));
         assert!(data.habits[1].days.is_empty());
@@ -815,14 +790,10 @@ mod tests {
 
     #[test]
     fn status_lines_follow_the_design() {
-        // Daily: the note wins, else EVERY DAY.
         assert_eq!(
             on(Schedule::Daily, &[]).status_on(fri()),
             ("EVERY DAY".to_string(), false)
         );
-        let mut h = on(Schedule::Daily, &[]);
-        h.note = "06:30 · 5 KM".into();
-        assert_eq!(h.status_on(fri()).0, "06:30 · 5 KM");
 
         // Weekly target in progress: accent progress line.
         let h = on(Schedule::TimesPerWeek { times: 2 }, &[nd(2026, 7, 27)]);
@@ -873,7 +844,7 @@ mod tests {
     #[test]
     fn add_stores_the_schedule_and_set_schedule_updates_it() {
         let mut data = Data::default();
-        data.add("Run", "", Schedule::EveryNDays { n: 2 });
+        data.add("Run", Schedule::EveryNDays { n: 2 });
         let id = data.habits[0].id;
         assert_eq!(data.habits[0].schedule, Schedule::EveryNDays { n: 2 });
         data.set_schedule(id, Schedule::TimesPerWeek { times: 3 });
