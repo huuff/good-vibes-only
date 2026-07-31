@@ -1,11 +1,13 @@
 //! Overlay sheets: the per-habit detail (month calendar with binary
-//! toggling inside the edit window, name/note editing, delete behind a
-//! two-tap confirm) and the add-habit form.
+//! toggling inside the edit window, name/note/schedule editing, delete
+//! behind a two-tap confirm) and the add-habit form with its schedule
+//! picker.
 
 use chrono::{Datelike, Local, Months, NaiveDate};
 use dioxus::prelude::*;
 
 use super::Overlays;
+use super::schedule::{ScheduleDraft, schedule_picker};
 use crate::store::{Data, editable};
 
 /// The days of the month containing `month`, Monday-first, with leading
@@ -47,6 +49,7 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
         data.with_mut(|d| {
             d.rename(id, &(overlays.name_draft)());
             d.set_note(id, &(overlays.note_draft)());
+            d.set_schedule(id, (overlays.sched_draft)().schedule());
             d.save();
         });
         overlays.editing.set(false);
@@ -143,6 +146,7 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                                 }
                             },
                         }
+                        {schedule_picker(overlays.sched_draft)}
                         button {
                             class: "btn",
                             disabled: (overlays.name_draft)().trim().is_empty(),
@@ -153,10 +157,11 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                 } else {
                     button {
                         class: "sheet-name",
-                        title: "Edit name and note",
+                        title: "Edit name, note and schedule",
                         onclick: move |_| {
                             overlays.name_draft.set(name.clone());
                             overlays.note_draft.set(note.clone());
+                            overlays.sched_draft.set(ScheduleDraft::from_schedule(habit.schedule));
                             overlays.editing.set(true);
                         },
                         "{habit.name} ✎"
@@ -165,7 +170,7 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                         div { class: "sheet-note", "{habit.note}" }
                     }
                     div { class: "sheet-stats",
-                        "Streak {habit.streak()} · best {habit.best_streak()}"
+                        "Streak {habit.streak()} · best {habit.best_streak()} · {habit.schedule.label()}"
                     }
                 }
                 div { class: "cal-nav",
@@ -229,7 +234,11 @@ pub fn add_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
             return;
         }
         data.with_mut(|d| {
-            d.add(&name, &(overlays.note_draft)());
+            d.add(
+                &name,
+                &(overlays.note_draft)(),
+                (overlays.sched_draft)().schedule(),
+            );
             d.save();
         });
         overlays.dismiss();
@@ -286,11 +295,12 @@ pub fn add_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                             }
                         },
                     }
+                    {schedule_picker(overlays.sched_draft)}
                     button {
                         class: "btn",
                         disabled: (overlays.name_draft)().trim().is_empty(),
                         onclick: move |_| add(),
-                        "ADD"
+                        "CREATE HABIT"
                     }
                 }
             }

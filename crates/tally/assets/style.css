@@ -283,6 +283,14 @@ button:disabled {
   overflow: auto;
 }
 
+.sec-head {
+  padding: 14px 20px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
 .row {
   display: flex;
   align-items: center;
@@ -310,8 +318,23 @@ button:disabled {
   border-color: var(--accent);
 }
 
+/* Not due, nothing to complete yet (spacing schedule). */
+.box.ghost {
+  border: 2px dashed var(--muted);
+}
+
+/* Period target met earlier in the week/window, just not today. */
+.box.period {
+  background: var(--text);
+  border-color: var(--text);
+}
+
 .box:active {
   border-color: var(--accent-down);
+}
+
+.row.undue {
+  opacity: 0.5;
 }
 
 .row-name {
@@ -332,6 +355,12 @@ button:disabled {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* An in-progress flexible target ("1 OF 2 THIS WEEK · DUE BY SUN"). */
+.row-name .note.accent {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .dots {
@@ -615,6 +644,135 @@ button:disabled {
   border-color: var(--accent);
 }
 
+/* --- schedule picker (design 3a) --------------------------------------- */
+
+.how-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.opts {
+  border: 1px solid var(--divider);
+}
+
+.opts > * {
+  border-bottom: 1px solid var(--divider);
+}
+
+.opts > :last-child {
+  border-bottom: none;
+}
+
+.opt {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 14px;
+}
+
+.opt.on {
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.opt-box {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: 2px solid var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.opt.on .opt-box {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.opt-label {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.opt-num {
+  font-weight: 800;
+  padding: 0 2px;
+}
+
+.opt.on .opt-num {
+  color: var(--accent);
+}
+
+.opt-panel {
+  display: flex;
+  background: var(--surface);
+}
+
+.step {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+}
+
+.step + .step {
+  border-left: 1px solid var(--divider);
+}
+
+.step-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+}
+
+.stepper button {
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.stepper button:disabled {
+  opacity: 0.35;
+}
+
+.stepper .step-val {
+  width: 40px;
+  height: 36px;
+  border-top: 2px solid var(--text);
+  border-bottom: 2px solid var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.opt-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 /* --- sheet calendar ---------------------------------------------------- */
 
 .cal-nav {
@@ -730,6 +888,10 @@ button:disabled {
 
   .row {
     padding: 0 32px;
+  }
+
+  .sec-head {
+    padding: 18px 32px 8px;
   }
 
   .overlay {

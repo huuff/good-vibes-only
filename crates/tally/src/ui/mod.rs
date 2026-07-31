@@ -5,6 +5,7 @@
 
 mod ledger;
 mod nav;
+mod schedule;
 mod sheet;
 mod sidebar;
 
@@ -12,6 +13,7 @@ use chrono::{Local, NaiveDate};
 use dioxus::prelude::*;
 
 use crate::store::Data;
+use schedule::ScheduleDraft;
 
 /// Tracked through the dioxus asset system (not inlined in index.html) so
 /// `dx serve` hot-reloads style edits without a rebuild.
@@ -55,6 +57,8 @@ pub struct Overlays {
     pub editing: Signal<bool>,
     pub name_draft: Signal<String>,
     pub note_draft: Signal<String>,
+    /// Schedule picker state for the add form and the edit mode.
+    pub sched_draft: Signal<ScheduleDraft>,
     /// Delete confirm armed.
     pub confirm: Signal<bool>,
 }
@@ -71,6 +75,7 @@ impl Overlays {
     pub fn open_add(&mut self) {
         self.name_draft.set(String::new());
         self.note_draft.set(String::new());
+        self.sched_draft.set(ScheduleDraft::default());
         self.adding.set(true);
         push_history_entry();
     }
@@ -102,6 +107,7 @@ pub fn app() -> Element {
         editing: use_signal(|| false),
         name_draft: use_signal(String::new),
         note_draft: use_signal(String::new),
+        sched_draft: use_signal(ScheduleDraft::default),
         confirm: use_signal(|| false),
     };
 

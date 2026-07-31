@@ -15,11 +15,23 @@ docs/superpowers/specs/2026-07-30-habits-tally-redesign-design.md).
 Days are binary: done or not. The checkbox toggles today; tapping the rest
 of the row opens a detail sheet with a month calendar (the last 7 days can
 be corrected there — forgot to log, logged by mistake…; older days are
-view-only), name/note editing, and delete behind a two-tap confirm.
+view-only), name/note/schedule editing, and delete behind a two-tap
+confirm.
+
+Habits don't have to be daily (design turn 3, Loop Habit Tracker's
+model): a schedule is every day, every N days, N times per calendar week
+(Monday–Sunday), or N times in a rolling M-day window. The Today ledger
+splits into DUE TODAY and NOT DUE TODAY, with progress lines like
+"1 OF 2 THIS WEEK · DUE BY SUN". Streaks generalize to consecutive
+satisfied periods (days / N-day blocks / weeks), and the current open
+period never breaks the streak — the same grace the daily streak always
+gave an unticked today. The header count and the week bars count only
+habits due that day.
 
 Storage is schema v2 (`habits/v2`). Data recorded by the v1 app
 (timestamped ticks) is migrated automatically on first load; the old key
-is left in place as a backup.
+is left in place as a backup. The schedule field is additive: data
+written before schedules existed simply reads back as daily.
 
 ## Develop
 

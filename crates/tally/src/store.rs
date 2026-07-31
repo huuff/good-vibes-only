@@ -6,7 +6,7 @@
 //! either a day counts or it doesn't) plus an optional free-text note.
 
 use crate::persist;
-use chrono::{Days, Local, NaiveDate};
+use chrono::{Datelike, Days, Local, NaiveDate};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -49,6 +49,40 @@ pub(crate) mod v1 {
     }
 }
 
+/// How often a habit is meant to happen (Loop Habit Tracker's model).
+/// Every schedule is "hit a target within a period": a day, a rolling
+/// N-day window, or the calendar week (Monday–Sunday).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum Schedule {
+    #[default]
+    Daily,
+    /// One check-in per rolling `n`-day window.
+    EveryNDays { n: u32 },
+    /// `times` check-ins per calendar week, Monday through Sunday.
+    TimesPerWeek { times: u32 },
+    /// `times` check-ins in any rolling `days`-day window.
+    TimesInDays { times: u32, days: u32 },
+}
+
+impl Schedule {
+    /// Short uppercase label: EVERY DAY, EVERY 3 DAYS, WEEKLY, 2×/WEEK,
+    /// 2× IN 5 DAYS.
+    pub fn label(&self) -> String {
+        match *self {
+            Schedule::Daily => "EVERY DAY".into(),
+            Schedule::EveryNDays { n } => format!("EVERY {n} DAYS"),
+            Schedule::TimesPerWeek { times: 1 } => "WEEKLY".into(),
+            Schedule::TimesPerWeek { times } => format!("{times}×/WEEK"),
+            Schedule::TimesInDays { times, days } => format!("{times}× IN {days} DAYS"),
+        }
+    }
+}
+
+/// The Monday of the week containing `day`.
+fn week_start(day: NaiveDate) -> NaiveDate {
+    day - Days::new(day.weekday().num_days_from_monday() as u64)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Habit {
     pub id: u64,
@@ -57,6 +91,10 @@ pub struct Habit {
     /// means none.
     #[serde(default)]
     pub note: String,
+    /// How often. Absent in data written before schedules existed, so it
+    /// defaults to daily — which is what every habit effectively was.
+    #[serde(default)]
+    pub schedule: Schedule,
     /// The days this habit was done.
     pub days: BTreeSet<NaiveDate>,
 }
@@ -70,43 +108,131 @@ impl Habit {
         self.done_on(Local::now().date_naive())
     }
 
-    /// Consecutive done-days counting back from today (or from yesterday
-    /// if today isn't done yet — an unticked today doesn't zero it).
-    pub fn streak(&self) -> usize {
-        let today = Local::now().date_naive();
-        let mut day = if self.done_on(today) {
-            today
-        } else {
-            match today.checked_sub_days(Days::new(1)) {
-                Some(d) => d,
-                None => return 0,
-            }
-        };
+    /// Check-ins in `[start, end]`, inclusive.
+    fn count_between(&self, start: NaiveDate, end: NaiveDate) -> u32 {
+        self.days.range(start..=end).count() as u32
+    }
+
+    /// The first day of the schedule period that ends on `end`: `end`
+    /// itself for daily, `end - (len - 1)` for the rolling windows, the
+    /// Monday of `end`'s week for per-week.
+    fn period_start(&self, end: NaiveDate) -> Option<NaiveDate> {
+        let back = |len: u32| end.checked_sub_days(Days::new(u64::from(len.max(1)) - 1));
+        match self.schedule {
+            Schedule::Daily => Some(end),
+            Schedule::EveryNDays { n } => back(n),
+            Schedule::TimesInDays { days, .. } => back(days),
+            Schedule::TimesPerWeek { .. } => Some(week_start(end)),
+        }
+    }
+
+    /// The schedule's check-in target per period.
+    fn target(&self) -> u32 {
+        match self.schedule {
+            Schedule::Daily | Schedule::EveryNDays { .. } => 1,
+            Schedule::TimesPerWeek { times } | Schedule::TimesInDays { times, .. } => times.max(1),
+        }
+    }
+
+    /// Whether the period containing `day` already has its target met,
+    /// counting check-ins up to and including `day`.
+    pub fn satisfied_on(&self, day: NaiveDate) -> bool {
+        self.period_start(day)
+            .is_some_and(|start| self.count_between(start, day) >= self.target())
+    }
+
+    /// Whether the habit belongs in the DUE list on `day`: its period
+    /// target isn't met yet, or it was checked off that very day (a
+    /// just-done habit stays in the due list, checked).
+    pub fn due_on(&self, day: NaiveDate) -> bool {
+        self.done_on(day) || !self.satisfied_on(day)
+    }
+
+    /// The first day after `day` on which the habit becomes due again,
+    /// assuming no further check-ins. Every schedule runs out within its
+    /// own window length, so the search is short; None only if the search
+    /// runs off the calendar.
+    pub fn next_due(&self, day: NaiveDate) -> Option<NaiveDate> {
+        (1..=366)
+            .filter_map(|ahead| day.checked_add_days(Days::new(ahead)))
+            .find(|&d| !self.satisfied_on(d))
+    }
+
+    /// Consecutive satisfied periods counting back from `day`. Rolling
+    /// windows are chopped into back-to-back blocks anchored at `day`.
+    /// The period containing `day` is still open, so missing it (yet)
+    /// doesn't zero the streak — it just doesn't count. Daily reduces to
+    /// the classic "consecutive done-days, unticked today forgiven".
+    pub fn streak_on(&self, day: NaiveDate) -> usize {
         let mut streak = 0;
-        while self.done_on(day) {
-            streak += 1;
-            match day.checked_sub_days(Days::new(1)) {
-                Some(d) => day = d,
+        let mut end = day;
+        while let Some(start) = self.period_start(end) {
+            if self.count_between(start, end) >= self.target() {
+                streak += 1;
+            } else if end != day {
+                break;
+            }
+            match start.checked_sub_days(Days::new(1)) {
+                Some(prev) => end = prev,
                 None => break,
             }
         }
         streak
     }
 
-    /// The longest run of consecutive done-days ever.
-    pub fn best_streak(&self) -> usize {
-        let mut best = 0;
-        let mut run = 0;
-        let mut prev: Option<NaiveDate> = None;
-        for &day in &self.days {
-            run = match prev {
-                Some(p) if p.succ_opt() == Some(day) => run + 1,
-                _ => 1,
-            };
-            best = best.max(run);
-            prev = Some(day);
+    /// The ledger's second line: the note (or EVERY DAY) for daily
+    /// habits, otherwise schedule + progress. True asks for the accent
+    /// color (an in-progress flexible target).
+    pub fn status_on(&self, day: NaiveDate) -> (String, bool) {
+        let next = || {
+            self.next_due(day)
+                .map(|d| {
+                    format!(
+                        " · NEXT {}",
+                        d.format("%a %-d %b").to_string().to_uppercase()
+                    )
+                })
+                .unwrap_or_default()
+        };
+        let count = self
+            .period_start(day)
+            .map_or(0, |start| self.count_between(start, day));
+        match self.schedule {
+            Schedule::Daily if self.note.is_empty() => ("EVERY DAY".into(), false),
+            Schedule::Daily => (self.note.clone(), false),
+            Schedule::EveryNDays { .. } if self.satisfied_on(day) && !self.done_on(day) => {
+                (format!("{}{}", self.schedule.label(), next()), false)
+            }
+            Schedule::EveryNDays { .. } => (self.schedule.label(), false),
+            Schedule::TimesPerWeek { times } if count >= times => {
+                (format!("{} · DONE THIS WEEK", self.schedule.label()), false)
+            }
+            Schedule::TimesPerWeek { times } => {
+                (format!("{count} OF {times} THIS WEEK · DUE BY SUN"), true)
+            }
+            Schedule::TimesInDays { times, .. } if count >= times => {
+                (format!("{}{}", self.schedule.label(), next()), false)
+            }
+            Schedule::TimesInDays { times, days } => {
+                (format!("{count} OF {times} IN {days} DAYS"), true)
+            }
         }
-        best
+    }
+
+    /// [`Self::streak_on`] as of today.
+    pub fn streak(&self) -> usize {
+        self.streak_on(Local::now().date_naive())
+    }
+
+    /// The longest run of consecutive satisfied periods ever, found by
+    /// re-measuring the streak as of each check-in. Quadratic in the
+    /// number of check-ins, which for a personal tracker is nothing.
+    pub fn best_streak(&self) -> usize {
+        self.days
+            .iter()
+            .map(|&day| self.streak_on(day))
+            .max()
+            .unwrap_or(0)
     }
 
     /// The last `n` days (oldest first), true where done.
@@ -154,6 +280,7 @@ impl Data {
                     id: h.id,
                     name: h.name,
                     note: String::new(),
+                    schedule: Schedule::Daily,
                     days: h
                         .ticks
                         .iter()
@@ -168,7 +295,7 @@ impl Data {
         persist::set(KEY, self);
     }
 
-    pub fn add(&mut self, name: &str, note: &str) {
+    pub fn add(&mut self, name: &str, note: &str, schedule: Schedule) {
         let name = name.trim();
         if name.is_empty() {
             return;
@@ -177,6 +304,7 @@ impl Data {
             id: self.next_id,
             name: name.to_string(),
             note: note.trim().to_string(),
+            schedule,
             days: BTreeSet::new(),
         });
         self.next_id += 1;
@@ -212,16 +340,26 @@ impl Data {
         }
     }
 
+    pub fn set_schedule(&mut self, id: u64, schedule: Schedule) {
+        if let Some(habit) = self.habits.iter_mut().find(|h| h.id == id) {
+            habit.schedule = schedule;
+        }
+    }
+
     pub fn delete(&mut self, id: u64) {
         self.habits.retain(|h| h.id != id);
     }
 }
 
-/// Whole-collection numbers for the header and the desktop sidebar.
+/// Whole-collection numbers for the header and the desktop sidebar. With
+/// schedules, only habits *due* on a day are counted for that day —
+/// that's what the design's "2/4" header means with six habits.
 pub struct Summary {
     pub done: usize,
+    /// Habits due today.
     pub total: usize,
-    /// The last 7 days (oldest first) with the fraction of habits done.
+    /// The last 7 days (oldest first) with the fraction of the habits due
+    /// that day that were done.
     pub week: Vec<(NaiveDate, f64)>,
     /// Best streak ever across all habits, with the habit's name.
     pub best: Option<(usize, String)>,
@@ -232,25 +370,25 @@ pub struct Summary {
 impl Data {
     pub fn summary(&self) -> Summary {
         let today = Local::now().date_naive();
-        let total = self.habits.len();
         let week = (0..7)
             .rev()
             .filter_map(|back| today.checked_sub_days(Days::new(back)))
             .map(|day| {
+                let due = self.habits.iter().filter(|h| h.due_on(day)).count();
                 let done = self.habits.iter().filter(|h| h.done_on(day)).count();
                 (
                     day,
-                    if total == 0 {
+                    if due == 0 {
                         0.0
                     } else {
-                        done as f64 / total as f64
+                        done as f64 / due as f64
                     },
                 )
             })
             .collect();
         Summary {
             done: self.habits.iter().filter(|h| h.done_today()).count(),
-            total,
+            total: self.habits.iter().filter(|h| h.due_on(today)).count(),
             week,
             best: self
                 .habits
@@ -291,8 +429,29 @@ mod tests {
             id: 0,
             name: "test".into(),
             note: String::new(),
+            schedule: Schedule::Daily,
             days: days_back.iter().map(|&b| day(b)).collect(),
         }
+    }
+
+    fn nd(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    fn on(schedule: Schedule, days: &[NaiveDate]) -> Habit {
+        Habit {
+            id: 0,
+            name: "test".into(),
+            note: String::new(),
+            schedule,
+            days: days.iter().copied().collect(),
+        }
+    }
+
+    /// Friday 31 Jul 2026 — the design doc's reference day. Its week runs
+    /// Mon 27 Jul – Sun 2 Aug.
+    fn fri() -> NaiveDate {
+        nd(2026, 7, 31)
     }
 
     #[test]
@@ -335,7 +494,7 @@ mod tests {
     #[test]
     fn toggle_flips_within_window_only() {
         let mut data = Data::default();
-        data.add("t", "");
+        data.add("t", "", Schedule::Daily);
         let id = data.habits[0].id;
         let today = Local::now().date_naive();
 
@@ -364,8 +523,8 @@ mod tests {
     #[test]
     fn add_trims_name_and_note_and_rejects_empty_names() {
         let mut data = Data::default();
-        data.add("  Run  ", "  06:30 · 5 KM  ");
-        data.add("   ", "note");
+        data.add("  Run  ", "  06:30 · 5 KM  ", Schedule::Daily);
+        data.add("   ", "note", Schedule::Daily);
         assert_eq!(data.habits.len(), 1);
         assert_eq!(data.habits[0].name, "Run");
         assert_eq!(data.habits[0].note, "06:30 · 5 KM");
@@ -374,7 +533,7 @@ mod tests {
     #[test]
     fn rename_and_set_note() {
         let mut data = Data::default();
-        data.add("Stretch", "");
+        data.add("Stretch", "", Schedule::Daily);
         let id = data.habits[0].id;
 
         data.rename(id, "  Morning stretch  ");
@@ -397,7 +556,7 @@ mod tests {
     #[test]
     fn delete_removes_the_habit() {
         let mut data = Data::default();
-        data.add("Stretch", "");
+        data.add("Stretch", "", Schedule::Daily);
         let id = data.habits[0].id;
         data.delete(id);
         assert!(data.habits.is_empty());
@@ -507,5 +666,241 @@ mod tests {
         );
         assert_eq!(data_with(vec![habit(&[0])]).summary().day_number, Some(1));
         assert_eq!(data_with(vec![habit(&[])]).summary().day_number, None);
+    }
+
+    #[test]
+    fn schedule_labels() {
+        assert_eq!(Schedule::Daily.label(), "EVERY DAY");
+        assert_eq!(Schedule::EveryNDays { n: 3 }.label(), "EVERY 3 DAYS");
+        assert_eq!(Schedule::TimesPerWeek { times: 1 }.label(), "WEEKLY");
+        assert_eq!(Schedule::TimesPerWeek { times: 2 }.label(), "2×/WEEK");
+        assert_eq!(
+            Schedule::TimesInDays { times: 2, days: 5 }.label(),
+            "2× IN 5 DAYS"
+        );
+    }
+
+    #[test]
+    fn schedule_defaults_to_daily_when_absent_in_stored_data() {
+        let json = r#"{"id":0,"name":"Run","days":[]}"#;
+        let h: Habit = serde_json::from_str(json).unwrap();
+        assert_eq!(h.schedule, Schedule::Daily);
+    }
+
+    #[test]
+    fn schedule_round_trips_through_serde() {
+        for schedule in [
+            Schedule::Daily,
+            Schedule::EveryNDays { n: 3 },
+            Schedule::TimesPerWeek { times: 2 },
+            Schedule::TimesInDays { times: 2, days: 5 },
+        ] {
+            let h = on(schedule, &[]);
+            let json = serde_json::to_string(&h).unwrap();
+            let back: Habit = serde_json::from_str(&json).unwrap();
+            assert_eq!(back.schedule, schedule);
+        }
+    }
+
+    #[test]
+    fn daily_habits_are_always_due() {
+        let done = on(Schedule::Daily, &[fri()]);
+        assert!(done.satisfied_on(fri()));
+        assert!(done.due_on(fri()));
+        let idle = on(Schedule::Daily, &[]);
+        assert!(!idle.satisfied_on(fri()));
+        assert!(idle.due_on(fri()));
+    }
+
+    #[test]
+    fn every_n_days_is_satisfied_while_the_window_holds_a_checkin() {
+        let h = on(Schedule::EveryNDays { n: 3 }, &[nd(2026, 7, 30)]);
+        assert!(!h.due_on(nd(2026, 7, 31)));
+        assert!(!h.due_on(nd(2026, 8, 1)));
+        // The check-in ages out of the 3-day window: due again.
+        assert!(h.due_on(nd(2026, 8, 2)));
+        // Never done: due.
+        assert!(on(Schedule::EveryNDays { n: 3 }, &[]).due_on(fri()));
+        // Done on the day itself: satisfied but still listed as due.
+        assert!(h.satisfied_on(nd(2026, 7, 30)));
+        assert!(h.due_on(nd(2026, 7, 30)));
+    }
+
+    #[test]
+    fn times_per_week_counts_the_calendar_week() {
+        let twice = Schedule::TimesPerWeek { times: 2 };
+        // 1 of 2 by Friday: still due.
+        assert!(on(twice, &[nd(2026, 7, 27)]).due_on(fri()));
+        // 2 of 2: done for the week.
+        assert!(!on(twice, &[nd(2026, 7, 27), nd(2026, 7, 29)]).due_on(fri()));
+        // Last week's check-ins don't count toward this week.
+        assert!(on(twice, &[nd(2026, 7, 25), nd(2026, 7, 26)]).due_on(fri()));
+    }
+
+    #[test]
+    fn times_in_days_uses_a_rolling_window() {
+        let s = Schedule::TimesInDays { times: 2, days: 5 };
+        let h = on(s, &[nd(2026, 7, 28), nd(2026, 7, 30)]);
+        // Both check-ins inside [27 Jul, 31 Jul].
+        assert!(!h.due_on(fri()));
+        // By 2 Aug the window is [29 Jul, 2 Aug]: only one left.
+        assert!(h.due_on(nd(2026, 8, 2)));
+    }
+
+    #[test]
+    fn next_due_is_the_day_the_window_breaks() {
+        let h = on(Schedule::EveryNDays { n: 3 }, &[nd(2026, 7, 30)]);
+        assert_eq!(h.next_due(fri()), Some(nd(2026, 8, 2)));
+        let h = on(
+            Schedule::TimesInDays { times: 2, days: 5 },
+            &[nd(2026, 7, 28), nd(2026, 7, 30)],
+        );
+        assert_eq!(h.next_due(fri()), Some(nd(2026, 8, 2)));
+    }
+
+    #[test]
+    fn every_n_days_streak_counts_consecutive_blocks() {
+        let s = Schedule::EveryNDays { n: 3 };
+        // Blocks back from Fri 31 Jul: [29–31], [26–28], [23–25], [20–22].
+        let h = on(s, &[nd(2026, 7, 30), nd(2026, 7, 27), nd(2026, 7, 24)]);
+        assert_eq!(h.streak_on(fri()), 3);
+        // Current block still open: not done yet doesn't zero it.
+        let h = on(s, &[nd(2026, 7, 27), nd(2026, 7, 24)]);
+        assert_eq!(h.streak_on(fri()), 2);
+        // A fully missed block breaks it.
+        let h = on(s, &[nd(2026, 7, 24)]);
+        assert_eq!(h.streak_on(fri()), 0);
+        // Two check-ins in one block count once.
+        let h = on(s, &[nd(2026, 7, 30), nd(2026, 7, 29)]);
+        assert_eq!(h.streak_on(fri()), 1);
+    }
+
+    #[test]
+    fn weekly_streak_counts_calendar_weeks() {
+        let weekly = Schedule::TimesPerWeek { times: 1 };
+        let h = on(weekly, &[nd(2026, 7, 29), nd(2026, 7, 22), nd(2026, 7, 15)]);
+        assert_eq!(h.streak_on(fri()), 3);
+        // This week still open: not done yet doesn't zero it.
+        let h = on(weekly, &[nd(2026, 7, 22), nd(2026, 7, 15)]);
+        assert_eq!(h.streak_on(fri()), 2);
+        // A missed week breaks it.
+        let h = on(weekly, &[nd(2026, 7, 29), nd(2026, 7, 15)]);
+        assert_eq!(h.streak_on(fri()), 1);
+        // 2×/week: last week hit, this week only 1 so far.
+        let twice = Schedule::TimesPerWeek { times: 2 };
+        let h = on(twice, &[nd(2026, 7, 29), nd(2026, 7, 23), nd(2026, 7, 21)]);
+        assert_eq!(h.streak_on(fri()), 1);
+    }
+
+    #[test]
+    fn daily_streak_on_matches_the_old_day_counting() {
+        assert_eq!(on(Schedule::Daily, &[]).streak_on(fri()), 0);
+        let h = on(
+            Schedule::Daily,
+            &[nd(2026, 7, 31), nd(2026, 7, 30), nd(2026, 7, 29)],
+        );
+        assert_eq!(h.streak_on(fri()), 3);
+        // Today unticked: counted from yesterday.
+        let h = on(Schedule::Daily, &[nd(2026, 7, 30), nd(2026, 7, 29)]);
+        assert_eq!(h.streak_on(fri()), 2);
+    }
+
+    #[test]
+    fn best_streak_works_for_flexible_schedules() {
+        let weekly = Schedule::TimesPerWeek { times: 1 };
+        // Weeks of Jun 29 and Jul 6 back to back, then a gap, then Jul 27.
+        let h = on(weekly, &[nd(2026, 7, 1), nd(2026, 7, 8), nd(2026, 7, 29)]);
+        assert_eq!(h.best_streak(), 2);
+    }
+
+    #[test]
+    fn status_lines_follow_the_design() {
+        // Daily: the note wins, else EVERY DAY.
+        assert_eq!(
+            on(Schedule::Daily, &[]).status_on(fri()),
+            ("EVERY DAY".to_string(), false)
+        );
+        let mut h = on(Schedule::Daily, &[]);
+        h.note = "06:30 · 5 KM".into();
+        assert_eq!(h.status_on(fri()).0, "06:30 · 5 KM");
+
+        // Weekly target in progress: accent progress line.
+        let h = on(Schedule::TimesPerWeek { times: 2 }, &[nd(2026, 7, 27)]);
+        assert_eq!(
+            h.status_on(fri()),
+            ("1 OF 2 THIS WEEK · DUE BY SUN".to_string(), true)
+        );
+        // Weekly target met.
+        let h = on(Schedule::TimesPerWeek { times: 1 }, &[nd(2026, 7, 27)]);
+        assert_eq!(
+            h.status_on(fri()),
+            ("WEEKLY · DONE THIS WEEK".to_string(), false)
+        );
+        let h = on(
+            Schedule::TimesPerWeek { times: 2 },
+            &[nd(2026, 7, 27), nd(2026, 7, 30)],
+        );
+        assert_eq!(
+            h.status_on(fri()),
+            ("2×/WEEK · DONE THIS WEEK".to_string(), false)
+        );
+
+        // Every N days: plain while due, next date once satisfied.
+        let h = on(Schedule::EveryNDays { n: 3 }, &[]);
+        assert_eq!(h.status_on(fri()), ("EVERY 3 DAYS".to_string(), false));
+        let h = on(Schedule::EveryNDays { n: 3 }, &[nd(2026, 7, 30)]);
+        assert_eq!(
+            h.status_on(fri()),
+            ("EVERY 3 DAYS · NEXT SUN 2 AUG".to_string(), false)
+        );
+
+        // Rolling window: accent progress while short of the target.
+        let h = on(
+            Schedule::TimesInDays { times: 2, days: 5 },
+            &[nd(2026, 7, 30)],
+        );
+        assert_eq!(h.status_on(fri()), ("1 OF 2 IN 5 DAYS".to_string(), true));
+        let h = on(
+            Schedule::TimesInDays { times: 2, days: 5 },
+            &[nd(2026, 7, 28), nd(2026, 7, 30)],
+        );
+        assert_eq!(
+            h.status_on(fri()),
+            ("2× IN 5 DAYS · NEXT SUN 2 AUG".to_string(), false)
+        );
+    }
+
+    #[test]
+    fn add_stores_the_schedule_and_set_schedule_updates_it() {
+        let mut data = Data::default();
+        data.add("Run", "", Schedule::EveryNDays { n: 2 });
+        let id = data.habits[0].id;
+        assert_eq!(data.habits[0].schedule, Schedule::EveryNDays { n: 2 });
+        data.set_schedule(id, Schedule::TimesPerWeek { times: 3 });
+        assert_eq!(data.habits[0].schedule, Schedule::TimesPerWeek { times: 3 });
+        // Unknown id: no-op, no panic.
+        data.set_schedule(id + 1, Schedule::Daily);
+    }
+
+    #[test]
+    fn summary_counts_only_due_habits() {
+        let daily_done = habit(&[0]);
+        let daily_todo = habit(&[]);
+        // Done yesterday on an every-3-days schedule: not due today.
+        let mut spaced = habit(&[1]);
+        spaced.schedule = Schedule::EveryNDays { n: 3 };
+        let s = data_with(vec![daily_done, spaced, daily_todo]).summary();
+        assert_eq!((s.done, s.total), (1, 2));
+    }
+
+    #[test]
+    fn summary_week_fractions_use_what_was_due_each_day() {
+        let mut spaced = habit(&[1]);
+        spaced.schedule = Schedule::EveryNDays { n: 3 };
+        let s = data_with(vec![habit(&[]), spaced]).summary();
+        // Yesterday: daily due + spaced due-and-done → 1 of 2.
+        assert_eq!(s.week[5], (day(1), 0.5));
+        // Today: spaced is covered by yesterday, only the daily is due.
+        assert_eq!(s.week[6], (day(0), 0.0));
     }
 }
