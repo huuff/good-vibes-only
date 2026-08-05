@@ -12,9 +12,15 @@ let
   wrapperBin =
     name: wrapper:
     pkgs.writeShellScriptBin name ''
+      ${lib.optionalString wrapper.allowGitCommonDir ''
+        gitFlags=()
+        if gitCommonDir=$(${lib.getExe pkgs.git} rev-parse --path-format=absolute --git-common-dir 2>/dev/null); then
+          gitFlags=(--allow "$gitCommonDir")
+        fi
+      ''}
       exec ${lib.getExe cfg.package} run \
         --profile ${lib.escapeShellArg wrapper.profile} \
-        ${lib.escapeShellArgs wrapper.extraFlags} \
+        ${lib.escapeShellArgs wrapper.extraFlags} ${lib.optionalString wrapper.allowGitCommonDir ''"''${gitFlags[@]}"''} \
         -- ${wrapper.command} "$@"
     '';
 in
@@ -67,6 +73,18 @@ in
                 Command line executed inside the sandbox. Interpolated into
                 the wrapper script verbatim, with the wrapper's own
                 arguments appended.
+              '';
+            };
+
+            allowGitCommonDir = lib.mkOption {
+              type = lib.types.bool;
+              default = false;
+              description = ''
+                Grant read+write access to `git rev-parse --git-common-dir`
+                at launch, so agents running in a linked worktree can reach
+                the shared `.git` directory. No-op outside a git repository,
+                and in a main worktree the common dir is `./.git`, already
+                inside the CWD.
               '';
             };
 

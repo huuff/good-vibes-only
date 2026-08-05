@@ -80,6 +80,7 @@
                   wrappers.claude-sandboxed = {
                     command = "claude --dangerously-skip-permissions";
                     extraFlags = [ "--allow-cwd" ];
+                    allowGitCommonDir = true;
                   };
                 };
               }
