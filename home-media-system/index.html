@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+    <title>Home media</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <div id="time">--:--</div>
+          <div id="date"></div>
+        </div>
+        <button id="power-button" class="round-button" aria-label="Power menu">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v10m6.36-6.36a9 9 0 1 1-12.72 0"/></svg>
+        </button>
+      </header>
+
+      <section class="apps-section">
+        <h1>Apps</h1>
+        <div id="applications" class="applications"></div>
+      </section>
+    </main>
+
+    <div id="modal" class="modal" hidden>
+      <section class="power-panel" role="dialog" aria-modal="true" aria-labelledby="power-title">
+        <h2 id="power-title">Power</h2>
+        <div id="power-actions" class="power-actions"></div>
+      </section>
+    </div>
+
+    <div id="connect-modal" class="modal" hidden>
+      <form id="connect-form" class="power-panel connect-panel">
+        <h2 id="connect-title">Connect</h2>
+        <label for="server-url">Server address</label>
+        <input id="server-url" type="text" inputmode="url" placeholder="https://media.example.net" autocomplete="url">
+        <p id="connect-error" class="connect-error" hidden>Enter a valid HTTP or HTTPS address.</p>
+        <div class="connect-actions">
+          <button id="connect-cancel" type="button" class="power-action">Cancel</button>
+          <button type="submit" class="power-action primary">Connect</button>
+        </div>
+      </form>
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

@@ -51,6 +51,52 @@
 
       homeModules = self.homeManagerModules;
 
+      nixosModules.home-media-system = ./nix/nixos/home-media-system.nix;
+
+      nixosConfigurations.home-media-system-vm = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          "${nixpkgs}/nixos/modules/virtualisation/qemu-vm.nix"
+          self.nixosModules.home-media-system
+          {
+            system.stateVersion = "25.11";
+            networking.hostName = "home-media-demo";
+
+            services.home-media-system = {
+              enable = true;
+              locale = "en-GB";
+              applications = {
+                jellyfin = {
+                  type = "jellyfin";
+                  order = 10;
+                };
+                jellyseerr = {
+                  type = "jellyseerr";
+                  order = 20;
+                };
+                youtube = {
+                  type = "youtube";
+                  url = "https://www.youtube.com/tv";
+                  order = 30;
+                };
+              };
+            };
+
+            virtualisation = {
+              memorySize = 3072;
+              cores = 2;
+              graphics = true;
+            };
+          }
+        ];
+      };
+
+      apps.x86_64-linux.home-media-system-vm = {
+        type = "app";
+        program = lib.getExe self.nixosConfigurations.home-media-system-vm.config.system.build.vm;
+        meta.description = "Run the home media system demo VM";
+      };
+
       checks = forAllSystems (pkgs: {
         packages = pkgs.symlinkJoin {
           name = "all-packages";
@@ -120,6 +166,7 @@
               }
             ];
           }).activationPackage;
+
       });
     };
 }
