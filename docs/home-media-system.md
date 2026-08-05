@@ -12,8 +12,9 @@ closes a native application or leaves an embedded web application and returns
 to the launcher. Escape or Browser Back also returns from embedded web apps.
 When an application opens, SwayOSD displays a reminder that Home returns to the
 launcher. Hardware volume, mute, play/pause, previous, next, and stop keys work
-globally and use the same overlay for feedback. Arrow keys move focus between
-cards and power actions.
+globally and use the same overlay for feedback. The launcher header also shows
+the current output volume and mute state. Arrow keys move focus between cards
+and power actions.
 
 ## Configuration
 

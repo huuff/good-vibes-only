@@ -161,6 +161,7 @@ let
       client = "${pkgs.swayosd}/bin/swayosd-client";
       inherit (cfg) homeHint homeHintDurationMs;
     };
+    audio.client = "${pkgs.wireplumber}/bin/wpctl";
     applications = renderedApplications;
   };
 

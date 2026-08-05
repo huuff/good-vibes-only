@@ -14,9 +14,23 @@
           <div id="time">--:--</div>
           <div id="date"></div>
         </div>
-        <button id="power-button" class="round-button" aria-label="Power menu">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v10m6.36-6.36a9 9 0 1 1-12.72 0"/></svg>
-        </button>
+        <div class="header-actions">
+          <div id="volume" class="volume is-unavailable" role="status" aria-live="polite" aria-label="Volume unavailable">
+            <svg class="volume-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path class="volume-speaker" d="M11 5 6.5 9H3v6h3.5l4.5 4Z"/>
+              <path class="volume-wave volume-wave-low" d="M14.5 9a4 4 0 0 1 0 6"/>
+              <path class="volume-wave volume-wave-high" d="M17.5 6a8 8 0 0 1 0 12"/>
+              <path class="volume-muted" d="m15 9 6 6m0-6-6 6"/>
+            </svg>
+            <div class="volume-track" role="progressbar" aria-label="Volume" aria-valuemin="0" aria-valuemax="100">
+              <div class="volume-level"></div>
+            </div>
+            <span class="volume-value">--%</span>
+          </div>
+          <button id="power-button" class="round-button" aria-label="Power menu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v10m6.36-6.36a9 9 0 1 1-12.72 0"/></svg>
+          </button>
+        </div>
       </header>
 
       <section class="apps-section">

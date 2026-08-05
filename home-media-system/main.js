@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const fs = require("fs");
 const path = require("path");
-const { spawn } = require("child_process");
+const { execFile, spawn } = require("child_process");
 
 let window;
 let settings;
@@ -72,6 +72,30 @@ function isWebUrl(url) {
 
 function readSecret(file) {
   return fs.readFileSync(file, "utf8").trimEnd();
+}
+
+function readVolume() {
+  return new Promise((resolve) => {
+    if (!settings.audio?.client) {
+      resolve(null);
+      return;
+    }
+    execFile(settings.audio.client, ["get-volume", "@DEFAULT_AUDIO_SINK@"], { timeout: 1000 }, (error, stdout) => {
+      if (error) {
+        resolve(null);
+        return;
+      }
+      const match = stdout.match(/Volume:\s+([0-9.]+)/);
+      if (!match) {
+        resolve(null);
+        return;
+      }
+      resolve({
+        percent: Math.max(0, Math.round(Number(match[1]) * 100)),
+        muted: /\[MUTED\]/i.test(stdout),
+      });
+    });
+  });
 }
 
 async function attemptAutoLogin(application) {
@@ -264,6 +288,7 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("settings", (event) => sentFromHome(event) ? publicSettings() : null);
+  ipcMain.handle("volume", (event) => sentFromHome(event) ? readVolume() : null);
   ipcMain.on("open", (event, id, runtimeUrl) => {
     if (!sentFromHome(event)) return;
     const selected = settings.applications.find((candidate) => candidate.id === id);

@@ -85,10 +85,48 @@ function addPowerAction(action, label) {
   document.querySelector("#power-actions").append(button);
 }
 
+async function updateVolume() {
+  const volume = document.querySelector("#volume");
+  let status;
+  try {
+    status = await window.homeMedia.volume();
+  } catch (_) {
+    status = null;
+  }
+  if (!status) {
+    if (volume.dataset.state === "unavailable") return;
+    volume.dataset.state = "unavailable";
+    volume.classList.add("is-unavailable");
+    volume.classList.remove("is-muted");
+    volume.querySelector(".volume-level").style.width = "0";
+    volume.querySelector(".volume-value").textContent = "--%";
+    const progress = volume.querySelector("[role=progressbar]");
+    progress.removeAttribute("aria-valuenow");
+    progress.setAttribute("aria-disabled", "true");
+    volume.setAttribute("aria-label", "Volume unavailable");
+    return;
+  }
+
+  const state = `${status.percent}:${status.muted}`;
+  if (volume.dataset.state === state) return;
+  volume.dataset.state = state;
+  const displayPercent = Math.min(status.percent, 100);
+  volume.classList.remove("is-unavailable");
+  volume.classList.toggle("is-muted", status.muted);
+  volume.querySelector(".volume-level").style.width = `${displayPercent}%`;
+  volume.querySelector(".volume-value").textContent = `${status.percent}%`;
+  const progress = volume.querySelector("[role=progressbar]");
+  progress.removeAttribute("aria-disabled");
+  progress.setAttribute("aria-valuenow", displayPercent);
+  volume.setAttribute("aria-label", status.muted ? `Volume muted at ${status.percent}%` : `Volume ${status.percent}%`);
+}
+
 window.homeMedia.settings().then((settings) => {
   document.title = settings.title;
   updateClock(settings);
   window.setInterval(() => updateClock(settings), 1000);
+  updateVolume();
+  window.setInterval(updateVolume, 750);
   settings.applications.forEach(addApplication);
 
   if (settings.power.sleep) addPowerAction("sleep", "Sleep");

@@ -19,13 +19,34 @@ header { width: 100%; display: flex; justify-content: space-between; align-items
 #time { font-size: clamp(2rem, 3vw, 2.4rem); font-weight: 500; line-height: 1; letter-spacing: -.03em; }
 #date { margin-top: .45rem; color: var(--muted); font-size: clamp(.78rem, 1.25vw, 1rem); }
 
+.header-actions { display: flex; align-items: center; gap: clamp(.9rem, 1.5vw, 1.4rem); }
+.volume { min-width: clamp(8.5rem, 14vw, 11.5rem); display: flex; align-items: center; gap: .7rem; color: var(--muted); }
+.volume-icon { width: 1.15rem; height: 1.15rem; flex: none; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.4; }
+.volume-muted { display: none; }
+.volume.is-muted .volume-wave { display: none; }
+.volume.is-muted .volume-muted { display: initial; }
+.volume-track { width: clamp(4.5rem, 8vw, 6.5rem); height: 3px; flex: none; overflow: hidden; border-radius: 999px; background: var(--line); }
+.volume-level { width: 0; height: 100%; border-radius: inherit; background: var(--accent); transition: width 120ms ease; }
+.volume.is-muted .volume-level { background: var(--muted); opacity: .55; }
+.volume.is-unavailable { opacity: .55; }
+.volume-value {
+  min-width: 2.6rem; height: 1.15rem; display: flex; align-items: center;
+  font-size: clamp(.72rem, 1.05vw, .9rem); font-variant-numeric: tabular-nums; line-height: 1;
+}
+
 button { color: inherit; font: inherit; }
 .round-button {
   width: clamp(2.25rem, 3.4vw, 2.75rem); height: clamp(2.25rem, 3.4vw, 2.75rem);
   display: grid; place-items: center; border: 1px solid #5c6075; border-radius: 50%;
-  background: transparent;
+  background: transparent; outline: 0;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
 }
 .round-button svg { width: 42%; fill: none; stroke: currentColor; stroke-linecap: round; stroke-width: 1.4; }
+.round-button:focus, .round-button:hover {
+  border-color: var(--accent); background: #2c293c;
+  box-shadow: 0 0 0 1px rgba(170,140,243,.16), 0 .45rem 1.4rem rgba(0,0,0,.22);
+}
+.round-button:active { transform: scale(.94); background: #3a3451; }
 
 .apps-section { margin-top: 14vh; }
 .apps-section h1 {
@@ -85,6 +106,9 @@ button { color: inherit; font: inherit; }
 .connect-actions .primary { border-color: var(--accent); background: #3a3451; }
 
 @media (max-width: 720px) {
+  .header-actions { gap: .7rem; }
+  .volume { min-width: 7.5rem; gap: .45rem; }
+  .volume-track { width: 3.75rem; }
   .apps-section h1 { width: 90.8vw; }
   .applications { gap: .8rem; overflow-x: auto; padding: 2px; }
   .app-card { min-width: 12rem; }
