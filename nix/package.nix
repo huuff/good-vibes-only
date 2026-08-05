@@ -1,18 +1,38 @@
 {
   rustPlatform,
   lib,
+  crate,
 }:
 
 rustPlatform.buildRustPackage {
-  pname = "good-vibes-only";
+  pname = crate;
   version = "0.1.0";
 
-  src = lib.cleanSource ../.;
+  # Only the cargo workspace files — commits touching nix/, docs, etc.
+  # don't invalidate the build.
+  src = lib.fileset.toSource {
+    root = ../.;
+    fileset = lib.fileset.unions [
+      ../Cargo.toml
+      ../Cargo.lock
+      ../crates
+    ];
+  };
 
   cargoLock.lockFile = ../Cargo.lock;
 
+  cargoBuildFlags = [
+    "-p"
+    crate
+  ];
+  cargoTestFlags = [
+    "-p"
+    crate
+  ];
+
   meta = {
-    description = "A cargo workspace hosting small vibe-coded Rust projects";
+    description = "${crate} from the good-vibes-only workspace";
     license = lib.licenses.mit;
+    mainProgram = crate;
   };
 }

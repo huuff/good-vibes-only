@@ -34,22 +34,16 @@
         ) (lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".nix" n) (builtins.readDir dir));
 
       extraPackages = pkgs: lib.mapAttrs (_: f: pkgs.callPackage f { }) (nixFilesIn ./nix/packages);
+
+      # One package per workspace crate, built with `cargo build -p <crate>`.
+      crates = lib.attrNames (lib.filterAttrs (_: t: t == "directory") (builtins.readDir ./crates));
+      cratePackages =
+        pkgs: lib.genAttrs crates (crate: pkgs.callPackage ./nix/package.nix { inherit crate; });
     in
     {
-      packages = forAllSystems (
-        pkgs:
-        {
-          default = pkgs.callPackage ./nix/package.nix { };
-        }
-        // extraPackages pkgs
-      );
+      packages = forAllSystems (pkgs: cratePackages pkgs // extraPackages pkgs);
 
-      overlays.default =
-        final: _prev:
-        {
-          good-vibes-only = final.callPackage ./nix/package.nix { };
-        }
-        // extraPackages final;
+      overlays.default = final: _prev: cratePackages final // extraPackages final;
 
       # Every nix/home-manager/<name>.nix is exported as
       # homeManagerModules.<name>.
@@ -58,7 +52,10 @@
       homeModules = self.homeManagerModules;
 
       checks = forAllSystems (pkgs: {
-        package = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+        packages = pkgs.symlinkJoin {
+          name = "all-packages";
+          paths = lib.attrValues self.packages.${pkgs.stdenv.hostPlatform.system};
+        };
 
         # Eval-only smoke test for the nono module: a minimal home
         # configuration exercising every option. `nix flake check

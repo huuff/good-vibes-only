@@ -12,8 +12,9 @@ plus reusable Nix modules under `nix/`.
 - Pre-commit hooks enforce rustfmt, clippy, and Conventional Commit
   messages (`feat:`, `fix:`, `chore:`, ...). Fix failures; never
   `--no-verify`.
-- The flake's `packages.default` builds the whole workspace; keep
-  `Cargo.lock` committed and up to date.
+- The flake exports one package per crate (`packages.<name>`, built
+  with `cargo build -p <name>`); keep `Cargo.lock` committed and up
+  to date.
 - Home-manager modules live in `nix/home-manager/`; each `<name>.nix`
   is auto-exported as `homeManagerModules.<name>` (alias `homeModules`),
   no flake edits needed. Give each one an eval-only smoke test in the
