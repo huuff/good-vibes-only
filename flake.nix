@@ -23,30 +23,37 @@
         "aarch64-darwin"
       ];
       forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+
+      # <name>.nix files in a directory, as { name = path; }. Feeds the
+      # globbed flake outputs below, mirroring how crates/* feeds the cargo
+      # workspace: drop a file in, no flake edits needed.
+      nixFilesIn =
+        dir:
+        lib.mapAttrs' (
+          fileName: _: lib.nameValuePair (lib.removeSuffix ".nix" fileName) (dir + "/${fileName}")
+        ) (lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".nix" n) (builtins.readDir dir));
+
+      extraPackages = pkgs: lib.mapAttrs (_: f: pkgs.callPackage f { }) (nixFilesIn ./nix/packages);
     in
     {
-      packages = forAllSystems (pkgs: {
-        default = pkgs.callPackage ./nix/package.nix { };
-      });
+      packages = forAllSystems (
+        pkgs:
+        {
+          default = pkgs.callPackage ./nix/package.nix { };
+        }
+        // extraPackages pkgs
+      );
 
-      overlays.default = final: _prev: {
-        good-vibes-only = final.callPackage ./nix/package.nix { };
-      };
+      overlays.default =
+        final: _prev:
+        {
+          good-vibes-only = final.callPackage ./nix/package.nix { };
+        }
+        // extraPackages final;
 
       # Every nix/home-manager/<name>.nix is exported as
-      # homeManagerModules.<name>, mirroring how crates/* feeds the cargo
-      # workspace: drop a file in, no flake edits needed.
-      homeManagerModules =
-        lib.mapAttrs'
-          (
-            fileName: _:
-            lib.nameValuePair (lib.removeSuffix ".nix" fileName) (./nix/home-manager + "/${fileName}")
-          )
-          (
-            lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".nix" n) (
-              builtins.readDir ./nix/home-manager
-            )
-          );
+      # homeManagerModules.<name>.
+      homeManagerModules = nixFilesIn ./nix/home-manager;
 
       homeModules = self.homeManagerModules;
 
@@ -77,6 +84,41 @@
                     command = "claude --dangerously-skip-permissions";
                     extraFlags = [ "--allow-cwd" ];
                   };
+                };
+              }
+            ];
+          }).activationPackage;
+
+        hm-ccstatusline =
+          (home-manager.lib.homeManagerConfiguration {
+            inherit pkgs;
+            modules = [
+              self.homeManagerModules.ccstatusline
+              {
+                home = {
+                  username = "vibes";
+                  homeDirectory = "/home/vibes";
+                  stateVersion = "25.11";
+                };
+                # Real package is unfree; any package satisfies the eval-only check.
+                programs.claude-code = {
+                  enable = true;
+                  package = pkgs.hello;
+                };
+                programs.ccstatusline = {
+                  enable = true;
+                  settings.lines = [
+                    [
+                      {
+                        id = "model";
+                        type = "model";
+                      }
+                      {
+                        id = "branch";
+                        type = "git-branch";
+                      }
+                    ]
+                  ];
                 };
               }
             ];
