@@ -157,6 +157,10 @@ let
       kiosk
       power
       ;
+    osd = {
+      client = "${pkgs.swayosd}/bin/swayosd-client";
+      inherit (cfg) homeHint homeHintDurationMs;
+    };
     applications = renderedApplications;
   };
 
@@ -174,12 +178,101 @@ let
     test "$(${pkgs.coreutils}/bin/stat -c %U "/proc/$launcher_pid")" = ${lib.escapeShellArg cfg.user} || exit 0
     kill -USR1 "$launcher_pid"
   '';
+  mediaAction = pkgs.writeShellScript "home-media-system-media-action" ''
+    media_uid="$(${pkgs.coreutils}/bin/id -u ${lib.escapeShellArg cfg.user})"
+    runtime_dir="/run/user/$media_uid"
+    test -S "$runtime_dir/bus" || exit 0
+    exec ${pkgs.util-linux}/bin/runuser -u ${lib.escapeShellArg cfg.user} -- \
+      ${pkgs.coreutils}/bin/env \
+        HOME=${lib.escapeShellArg homeDirectory} \
+        XDG_RUNTIME_DIR="$runtime_dir" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime_dir/bus" \
+        PATH=${lib.escapeShellArg (lib.makeBinPath [ pkgs.playerctl ])} \
+        ${pkgs.swayosd}/bin/swayosd-client "$@"
+  '';
+  osdStyle = pkgs.writeText "home-media-system-swayosd.css" ''
+    window#osd {
+      border: 1px solid #5c6075;
+      border-radius: 9px;
+      background: rgba(37, 39, 47, 0.96);
+      box-shadow: 0 16px 42px rgba(0, 0, 0, 0.38);
+      color: #ececf3;
+      font-family: Inter, sans-serif;
+      font-size: 18px;
+      font-weight: 500;
+    }
+
+    window#osd #container {
+      margin: 18px 22px;
+    }
+
+    window#osd image,
+    window#osd label {
+      color: #ececf3;
+    }
+
+    window#osd progressbar:disabled,
+    window#osd image:disabled {
+      opacity: 0.5;
+    }
+
+    window#osd progressbar,
+    window#osd segmentedprogress {
+      min-height: 7px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+    }
+
+    window#osd trough,
+    window#osd segment {
+      min-height: inherit;
+      border: none;
+      border-radius: inherit;
+      background: #404354;
+    }
+
+    window#osd progress,
+    window#osd segment.active {
+      min-height: inherit;
+      border: none;
+      border-radius: inherit;
+      background: #aa8cf3;
+    }
+
+    window#osd segment {
+      margin-left: 8px;
+    }
+
+    window#osd segment:first-child {
+      margin-left: 0;
+    }
+  '';
+  launcher = pkgs.writeShellScript "home-media-system-launcher" ''
+    ${pkgs.swayosd}/bin/swayosd-server --style ${osdStyle} &
+    osd_pid=$!
+    trap 'kill "$osd_pid" 2>/dev/null || true' EXIT
+    ${lib.getExe cfg.package} --config ${settingsFile}
+    ${pkgs.sway}/bin/swaymsg exit
+  '';
+  swayConfig = pkgs.writeText "home-media-system-sway.conf" ''
+    default_border none
+    default_floating_border none
+    focus_follows_mouse no
+    output * bg "#090b14" solid_color
+    seat * hide_cursor 3000
+    xwayland enable
+
+    for_window [app_id=".*"] fullscreen enable
+    for_window [class=".*"] fullscreen enable
+
+    exec ${launcher}
+  '';
   session = pkgs.writeShellScriptBin "home-media-system-session" ''
     export XDG_CONFIG_HOME=${lib.escapeShellArg "${homeDirectory}/.config"}
     export XDG_CACHE_HOME=${lib.escapeShellArg "${homeDirectory}/.cache"}
     export XDG_STATE_HOME=${lib.escapeShellArg "${homeDirectory}/.local/state"}
-    exec ${lib.getExe pkgs.cage} -- \
-      ${lib.getExe cfg.package} --config ${settingsFile}
+    exec ${lib.getExe pkgs.sway} --config ${swayConfig}
   '';
 in
 {
@@ -238,6 +331,21 @@ in
       type = lib.types.bool;
       default = true;
       description = "Use Chromium kiosk mode, preventing the window from being closed normally.";
+    };
+
+    homeHint = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = "Press Home to go back to Home";
+      description = ''
+        SwayOSD message shown whenever an application opens. Set this to null
+        to disable the hint.
+      '';
+    };
+
+    homeHintDurationMs = lib.mkOption {
+      type = lib.types.ints.between 1000 10000;
+      default = 4000;
+      description = "Approximate time in milliseconds to keep the Home hint visible.";
     };
 
     applications = lib.mkOption {
@@ -306,6 +414,8 @@ in
     environment.systemPackages = [
       cfg.package
       cfg.jellyfinPackage
+      pkgs.sway
+      pkgs.swayosd
       session
     ];
 
@@ -321,10 +431,10 @@ in
         pulse.enable = true;
       };
 
-      # Cage intentionally has no global keybinding facility. Triggerhappy reads
-      # input events independently of application focus and signals the launcher,
-      # so Home works identically in native and embedded applications. HOMEPAGE
-      # covers remotes that expose their Home button under the media key code.
+      # Triggerhappy reads Linux input events independently of application
+      # focus, providing consistent Home and media controls in native and
+      # embedded applications. HOMEPAGE covers remotes that expose their Home
+      # button under the media key code.
       triggerhappy = {
         enable = true;
         user = "root";
@@ -336,6 +446,38 @@ in
           {
             keys = [ "HOMEPAGE" ];
             cmd = toString returnHome;
+          }
+          {
+            keys = [ "VOLUMEUP" ];
+            cmd = "${mediaAction} --output-volume raise";
+          }
+          {
+            keys = [ "VOLUMEDOWN" ];
+            cmd = "${mediaAction} --output-volume lower";
+          }
+          {
+            keys = [ "MUTE" ];
+            cmd = "${mediaAction} --output-volume mute-toggle";
+          }
+          {
+            keys = [ "MICMUTE" ];
+            cmd = "${mediaAction} --input-volume mute-toggle";
+          }
+          {
+            keys = [ "PLAYPAUSE" ];
+            cmd = "${mediaAction} --playerctl play-pause";
+          }
+          {
+            keys = [ "NEXTSONG" ];
+            cmd = "${mediaAction} --playerctl next";
+          }
+          {
+            keys = [ "PREVIOUSSONG" ];
+            cmd = "${mediaAction} --playerctl prev";
+          }
+          {
+            keys = [ "STOPCD" ];
+            cmd = "${mediaAction} --playerctl stop";
           }
         ];
       };

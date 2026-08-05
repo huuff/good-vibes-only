@@ -9,6 +9,7 @@ let onHome = true;
 let activeApplication;
 let activeOrigin;
 let nativeChild;
+const homeHintTimers = new Set();
 const pidFile = process.env.XDG_STATE_HOME
   ? path.join(process.env.XDG_STATE_HOME, "home-media-system", "launcher.pid")
   : undefined;
@@ -39,6 +40,8 @@ function publicSettings() {
 }
 
 function showHome() {
+  for (const timer of homeHintTimers) clearTimeout(timer);
+  homeHintTimers.clear();
   onHome = true;
   activeApplication = undefined;
   activeOrigin = undefined;
@@ -153,6 +156,29 @@ function runPowerAction(action) {
   child.unref();
 }
 
+function showHomeHint() {
+  if (!settings.osd?.client || !settings.osd.homeHint) return;
+
+  const display = () => {
+    const child = spawn(settings.osd.client, ["--custom-message", settings.osd.homeHint], {
+      detached: true,
+      stdio: "ignore",
+    });
+    child.on("error", (error) => console.error("Could not show Home hint:", error.message));
+    child.unref();
+  };
+
+  display();
+  const duration = settings.osd.homeHintDurationMs || 4000;
+  for (let delay = 750; delay < duration; delay += 750) {
+    const timer = setTimeout(() => {
+      homeHintTimers.delete(timer);
+      display();
+    }, delay);
+    homeHintTimers.add(timer);
+  }
+}
+
 function openNativeApplication(application) {
   if (!application.nativeCommand || nativeChild) return;
 
@@ -163,6 +189,7 @@ function openNativeApplication(application) {
   nativeChild.once("spawn", () => {
     onHome = false;
     window.hide();
+    showHomeHint();
   });
   nativeChild.once("error", (error) => {
     console.error(`Could not launch ${application.name}:`, error.message);
@@ -257,6 +284,7 @@ app.whenReady().then(() => {
     activeOrigin = parsed.origin;
     onHome = false;
     window.loadURL(target);
+    showHomeHint();
   });
   ipcMain.on("power", (event, action) => {
     if (sentFromHome(event)) runPowerAction(action);

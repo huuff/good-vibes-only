@@ -2,14 +2,18 @@
 
 `nixosModules.home-media-system` turns a NixOS machine into a dedicated
 ten-foot media appliance. It creates an unprivileged media user and uses greetd
-to log directly into a Cage session containing only the launcher. Jellyfin
+to log directly into a minimal Sway session containing only the launcher.
+Sway supplies the layer-shell support used by the on-screen display. Jellyfin
 cards launch the official Jellyfin Desktop client; Jellyseerr, YouTube, and
 generic web applications run in the launcher's persistent Chromium profile.
 
 Every application opens fullscreen. Pressing the keyboard or remote Home key
 closes a native application or leaves an embedded web application and returns
 to the launcher. Escape or Browser Back also returns from embedded web apps.
-Arrow keys move focus between cards and power actions.
+When an application opens, SwayOSD displays a reminder that Home returns to the
+launcher. Hardware volume, mute, play/pause, previous, next, and stop keys work
+globally and use the same overlay for feedback. Arrow keys move focus between
+cards and power actions.
 
 ## Configuration
 
@@ -42,6 +46,9 @@ Arrow keys move focus between cards and power actions.
               enable = true;
               user = "media";
               locale = "en-GB";
+              # Set to null to hide the app-opening reminder.
+              homeHint = "Press Home to go back to Home";
+              homeHintDurationMs = 4000;
 
               applications = {
                 jellyfin = {
@@ -93,9 +100,9 @@ If an installation customizes its web login page, set `usernameSelector`,
 Jellyfin Desktop manages its own login and persistent session rather than using
 the launcher's form automation.
 
-The module also enables graphics, PipeWire audio, RTKit, and Polkit. Normal
-logind policy lets the active local media user suspend, reboot, and power off
-from the power menu.
+The module also enables graphics, PipeWire audio, RTKit, Polkit, and SwayOSD.
+Normal logind policy lets the active local media user suspend, reboot, and power
+off from the power menu.
 
 ## Demo VM
 
