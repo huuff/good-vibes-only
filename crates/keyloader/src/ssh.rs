@@ -1,10 +1,162 @@
 use std::collections::HashSet;
+use std::ffi::OsStr;
+use std::fs;
+use std::os::unix::fs::MetadataExt;
+use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 use zeroize::Zeroizing;
 
 use crate::proc;
+
+/// Human-readable retention policy of the agent addressed by
+/// `SSH_AUTH_SOCK`. OpenSSH's agent protocol does not expose either
+/// this default or a per-identity expiry time, so on Linux we recover
+/// the command line of the process that owns the listening socket.
+pub enum RetentionPolicy {
+    Limited(u64),
+    Forever,
+    Unknown,
+}
+
+pub fn retention_policy() -> RetentionPolicy {
+    let Some(args) = agent_command_line() else {
+        return RetentionPolicy::Unknown;
+    };
+    match parse_agent_lifetime(&args) {
+        Some(Some(lifetime)) => parse_duration(&lifetime)
+            .map(RetentionPolicy::Limited)
+            .unwrap_or(RetentionPolicy::Unknown),
+        Some(None) => RetentionPolicy::Forever,
+        None => RetentionPolicy::Unknown,
+    }
+}
+
+fn parse_duration(value: &str) -> Option<u64> {
+    let mut total = 0_u64;
+    let mut digits = String::new();
+    for character in value.chars() {
+        if character.is_ascii_digit() {
+            digits.push(character);
+            continue;
+        }
+        let number = digits.parse::<u64>().ok()?;
+        digits.clear();
+        let multiplier = match character {
+            's' | 'S' => 1,
+            'm' | 'M' => 60,
+            'h' | 'H' => 60 * 60,
+            'd' | 'D' => 24 * 60 * 60,
+            'w' | 'W' => 7 * 24 * 60 * 60,
+            _ => return None,
+        };
+        total = total.checked_add(number.checked_mul(multiplier)?)?;
+    }
+    if !digits.is_empty() {
+        total = total.checked_add(digits.parse().ok()?)?;
+    }
+    (total > 0).then_some(total)
+}
+
+/// `Some(None)` means this is OpenSSH ssh-agent with no default
+/// lifetime; `None` means the socket belongs to some other/unknown
+/// agent implementation.
+fn parse_agent_lifetime(args: &[String]) -> Option<Option<String>> {
+    let executable = Path::new(args.first()?).file_name()?;
+    if executable != OsStr::new("ssh-agent") {
+        return None;
+    }
+    let mut args = args.iter().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "-t" {
+            return args.next().cloned().map(Some);
+        }
+        if let Some(lifetime) = arg.strip_prefix("-t")
+            && !lifetime.is_empty()
+        {
+            return Some(Some(lifetime.to_string()));
+        }
+    }
+    Some(None)
+}
+
+fn agent_command_line() -> Option<Vec<String>> {
+    let socket = std::env::var_os("SSH_AUTH_SOCK")?;
+    let inode = fs::metadata(socket).ok()?.ino();
+    let target = format!("socket:[{inode}]");
+
+    for process in fs::read_dir("/proc").ok()?.flatten() {
+        if !process
+            .file_name()
+            .to_string_lossy()
+            .bytes()
+            .all(|byte| byte.is_ascii_digit())
+        {
+            continue;
+        }
+        let Ok(fds) = fs::read_dir(process.path().join("fd")) else {
+            continue;
+        };
+        if !fds
+            .flatten()
+            .any(|fd| fs::read_link(fd.path()).is_ok_and(|link| link == Path::new(&target)))
+        {
+            continue;
+        }
+        let bytes = fs::read(process.path().join("cmdline")).ok()?;
+        return Some(
+            bytes
+                .split(|byte| *byte == 0)
+                .filter(|arg| !arg.is_empty())
+                .map(|arg| String::from_utf8_lossy(arg).into_owned())
+                .collect(),
+        );
+    }
+    systemd_agent_command_line()
+}
+
+/// Sandboxes and hardened `/proc` mounts may hide another process's
+/// file descriptors. For the conventional systemd user unit, its
+/// effective (already evaluated) command is an equivalent read-only
+/// source. Only accept it when `-a` names our current agent socket.
+fn systemd_agent_command_line() -> Option<Vec<String>> {
+    let out = Command::new("systemctl")
+        .args([
+            "--user",
+            "show",
+            "ssh-agent.service",
+            "--property=ExecStart",
+            "--value",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let output = String::from_utf8_lossy(&out.stdout);
+    let command = output.split("argv[]=").nth(1)?.split(" ;").next()?;
+    let args: Vec<String> = command.split_whitespace().map(str::to_string).collect();
+    let socket = std::env::var_os("SSH_AUTH_SOCK")?;
+    agent_socket(&args)
+        .is_some_and(|path| Path::new(path) == Path::new(&socket))
+        .then_some(args)
+}
+
+fn agent_socket(args: &[String]) -> Option<&str> {
+    let mut args = args.iter().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "-a" {
+            return args.next().map(String::as_str);
+        }
+        if let Some(path) = arg.strip_prefix("-a")
+            && !path.is_empty()
+        {
+            return Some(path);
+        }
+    }
+    None
+}
 
 /// SHA256 fingerprints of the keys currently loaded in ssh-agent.
 pub fn loaded_fingerprints() -> Result<HashSet<String>> {
@@ -72,5 +224,42 @@ mod tests {
     fn ignores_noise_lines() {
         assert!(parse_listing("The agent has no identities.\n").is_empty());
         assert!(parse_listing("").is_empty());
+    }
+
+    #[test]
+    fn parses_agent_default_lifetime() {
+        let args = strings(&["/usr/bin/ssh-agent", "-t", "1h", "-a", "/tmp/agent"]);
+        assert_eq!(parse_agent_lifetime(&args), Some(Some("1h".into())));
+
+        let args = strings(&["ssh-agent", "-D", "-t24h"]);
+        assert_eq!(parse_agent_lifetime(&args), Some(Some("24h".into())));
+
+        let args = strings(&["ssh-agent", "-D"]);
+        assert_eq!(parse_agent_lifetime(&args), Some(None));
+
+        let args = strings(&["gpg-agent", "--enable-ssh-support"]);
+        assert_eq!(parse_agent_lifetime(&args), None);
+    }
+
+    #[test]
+    fn parses_agent_socket() {
+        let args = strings(&["ssh-agent", "-t", "1h", "-a", "/tmp/agent"]);
+        assert_eq!(agent_socket(&args), Some("/tmp/agent"));
+
+        let args = strings(&["ssh-agent", "-a/tmp/agent"]);
+        assert_eq!(agent_socket(&args), Some("/tmp/agent"));
+    }
+
+    #[test]
+    fn parses_openssh_durations() {
+        assert_eq!(parse_duration("1h"), Some(3600));
+        assert_eq!(parse_duration("1h30m"), Some(5400));
+        assert_eq!(parse_duration("90"), Some(90));
+        assert_eq!(parse_duration("2d"), Some(172800));
+        assert_eq!(parse_duration("forever"), None);
+    }
+
+    fn strings(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| value.to_string()).collect()
     }
 }

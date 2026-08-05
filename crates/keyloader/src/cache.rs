@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::io::Write;
@@ -46,6 +47,12 @@ pub struct Cache {
     pub updated_at: u64,
     pub ssh: Vec<Item>,
     pub gpg: Vec<Item>,
+    /// Last time keyloader itself added each 1Password SSH item.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub ssh_loaded_at: HashMap<String, u64>,
+    /// Last time keyloader itself preset each GPG keygrip, by item id.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub gpg_preset_at: HashMap<String, HashMap<String, u64>>,
 }
 
 impl Cache {
@@ -54,6 +61,35 @@ impl Cache {
             updated_at: now(),
             ssh,
             gpg,
+            ssh_loaded_at: HashMap::new(),
+            gpg_preset_at: HashMap::new(),
+        }
+    }
+
+    /// Carry load timestamps through discovery only for unchanged
+    /// 1Password items. An edit may represent key rotation.
+    pub fn carry_tracking_from(&mut self, previous: &Self) {
+        let unchanged = |item: &Item, old: &[Item]| {
+            old.iter().any(|candidate| {
+                candidate.summary.id == item.summary.id
+                    && candidate.summary.version == item.summary.version
+            })
+        };
+        for item in &self.ssh {
+            if unchanged(item, &previous.ssh)
+                && let Some(loaded_at) = previous.ssh_loaded_at.get(&item.summary.id)
+            {
+                self.ssh_loaded_at
+                    .insert(item.summary.id.clone(), *loaded_at);
+            }
+        }
+        for item in &self.gpg {
+            if unchanged(item, &previous.gpg)
+                && let Some(preset_at) = previous.gpg_preset_at.get(&item.summary.id)
+            {
+                self.gpg_preset_at
+                    .insert(item.summary.id.clone(), preset_at.clone());
+            }
         }
     }
 
@@ -63,7 +99,7 @@ impl Cache {
     }
 }
 
-fn now() -> u64 {
+pub fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -76,6 +112,15 @@ pub fn humanize(secs: u64) -> String {
         60..=3599 => format!("{}m ago", secs / 60),
         3600..=86399 => format!("{}h ago", secs / 3600),
         _ => format!("{}d ago", secs / 86400),
+    }
+}
+
+pub fn human_duration(secs: u64) -> String {
+    match secs {
+        0..=59 => format!("{secs}s"),
+        60..=3599 => format!("{}m", secs / 60),
+        3600..=86399 => format!("{}h", secs / 3600),
+        _ => format!("{}d", secs / 86400),
     }
 }
 
@@ -131,7 +176,7 @@ mod tests {
 
     #[test]
     fn roundtrips_through_json() {
-        let cache = Cache::new(
+        let mut cache = Cache::new(
             vec![Item {
                 summary: serde_json::from_str(
                     r#"{"id":"abc","title":"key","vault":{"id":"v1","name":"Personal"}}"#,
@@ -141,12 +186,14 @@ mod tests {
             }],
             vec![],
         );
+        cache.ssh_loaded_at.insert("abc".into(), 1234);
         let json = serde_json::to_string(&cache).unwrap();
         let back: Cache = serde_json::from_str(&json).unwrap();
         assert_eq!(back.ssh.len(), 1);
         assert_eq!(back.ssh[0].summary.id, "abc");
         assert_eq!(back.ssh[0].summary.vault.name, "Personal");
         assert_eq!(back.ssh[0].fingerprint.as_deref(), Some("SHA256:abc"));
+        assert_eq!(back.ssh_loaded_at.get("abc"), Some(&1234));
         assert!(back.gpg.is_empty());
     }
 
@@ -156,5 +203,14 @@ mod tests {
         assert_eq!(humanize(90), "1m ago");
         assert_eq!(humanize(7200), "2h ago");
         assert_eq!(humanize(200_000), "2d ago");
+    }
+
+    #[test]
+    fn humanizes_durations() {
+        assert_eq!(human_duration(45), "45s");
+        assert_eq!(human_duration(1800), "30m");
+        assert_eq!(human_duration(7200), "2h");
+        assert_eq!(human_duration(86400), "1d");
+        assert_eq!(human_duration(90), "1m");
     }
 }

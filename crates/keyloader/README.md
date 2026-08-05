@@ -19,11 +19,16 @@ Secrets only ever move through pipes between `op`, `gpg`, `ssh-add` and
 `discover` mirrors what it finds into
 `$XDG_CACHE_HOME/keyloader/items.json` (default
 `~/.cache/keyloader/items.json`): item ids, titles, vault names and
-public fingerprints — metadata only, no key material. `status` and
-`load` read that cache instead of listing items through `op`, so:
+public fingerprints, plus timestamps for keys loaded by keyloader —
+metadata only, no key material. `status` and `load` read that cache
+instead of listing items through `op`, so:
 
 - `status` never touches 1Password — it only asks ssh-agent and
-  gpg-agent, and works signed out, locked, or offline.
+  gpg-agent, and works signed out, locked, or offline. For currently
+  loaded entries, it reports the estimated remaining time when
+  keyloader loaded the entry itself. Agent protocols do not expose
+  per-key expiry times, so entries loaded before tracking or refreshed
+  by another program have an unknown countdown.
 - `load` contacts 1Password only to fetch the secrets of keys that are
   actually missing; when everything is already loaded it makes no `op`
   calls at all.
@@ -166,4 +171,6 @@ $ cargo run -p keyloader -- status
 ```
 
 Runtime dependencies looked up on PATH: `op`, `gpg`, `gpgconf`,
-`gpg-connect-agent`, `ssh-add`.
+`gpg-connect-agent`, `ssh-add`. `systemctl` is used as an optional
+fallback for inspecting a systemd-managed ssh-agent's retention policy
+when the agent process is hidden by a sandboxed `/proc`.

@@ -94,6 +94,39 @@ pub fn cached_keygrips() -> Result<HashSet<String>> {
     Ok(parse_keyinfo(&String::from_utf8_lossy(&out.stdout)))
 }
 
+/// Effective maximum cache TTL reported by gpgconf. This bounds entries
+/// inserted by gpg-preset-passphrase.
+pub fn max_cache_ttl() -> Result<u64> {
+    let out = Command::new("gpgconf")
+        .args(["--list-options", "gpg-agent"])
+        .output()
+        .context("failed to run `gpgconf`")?;
+    if !out.status.success() {
+        bail!(
+            "`gpgconf --list-options gpg-agent` failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    parse_max_cache_ttl(&String::from_utf8_lossy(&out.stdout))
+        .context("`gpgconf` did not report gpg-agent's maximum cache TTL")
+}
+
+fn parse_max_cache_ttl(output: &str) -> Option<u64> {
+    output.lines().find_map(|line| {
+        let fields: Vec<&str> = line.split(':').collect();
+        (fields.first() == Some(&"max-cache-ttl")).then(|| {
+            // Field 10 is the configured value. If absent, field 8
+            // contains gpgconf's built-in default.
+            fields
+                .get(9)
+                .filter(|value| !value.is_empty())
+                .or_else(|| fields.get(7))?
+                .parse::<u64>()
+                .ok()
+        })?
+    })
+}
+
 /// Parse `KEYINFO <keygrip> <type> <serialno> <idstr> <cached> ...` lines
 /// as emitted by gpg-connect-agent (prefixed with `S `); the `cached`
 /// column is `1` when the passphrase is in the agent's cache.
@@ -202,5 +235,21 @@ OK
         let cached = parse_keyinfo(output);
         assert_eq!(cached.len(), 1);
         assert!(cached.contains("1111111111111111111111111111111111111111"));
+    }
+
+    #[test]
+    fn parses_effective_max_cache_ttl() {
+        let options = "\
+default-cache-ttl:24:0:description:3:3:N:600::1800\n\
+max-cache-ttl:24:2:description:3:3:N:7200::86400\n";
+        assert_eq!(parse_max_cache_ttl(options), Some(86400));
+    }
+
+    #[test]
+    fn max_cache_ttl_falls_back_to_gpg_default() {
+        let options = "\
+default-cache-ttl:24:0:description:3:3:N:600::\n\
+max-cache-ttl:24:2:description:3:3:N:7200::\n";
+        assert_eq!(parse_max_cache_ttl(options), Some(7200));
     }
 }
