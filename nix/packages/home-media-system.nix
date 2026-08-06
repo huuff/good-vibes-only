@@ -3,6 +3,7 @@
   stdenvNoCC,
   makeWrapper,
   electron,
+  nodejs,
   systemd,
 }:
 
@@ -13,6 +14,15 @@ stdenvNoCC.mkDerivation {
   src = ../../home-media-system;
 
   nativeBuildInputs = [ makeWrapper ];
+
+  doCheck = true;
+  nativeCheckInputs = [ nodejs ];
+
+  checkPhase = ''
+    runHook preCheck
+    node --test jellyfin-native-login.test.js
+    runHook postCheck
+  '';
 
   installPhase = ''
     runHook preInstall

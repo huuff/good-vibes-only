@@ -2,5 +2,8 @@
   "name": "home-media-system",
   "version": "0.1.0",
   "private": true,
-  "main": "main.js"
+  "main": "main.js",
+  "scripts": {
+    "test": "node --test jellyfin-native-login.test.js"
+  }
 }

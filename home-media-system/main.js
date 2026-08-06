@@ -111,7 +111,6 @@ async function attemptAutoLogin(application) {
   }
 
   const payload = JSON.stringify({
-    type: application.type,
     username: login.username,
     password,
     usernameSelector: login.usernameSelector,
@@ -137,25 +136,14 @@ async function attemptAutoLogin(application) {
         attempts += 1;
         const user = document.querySelector(options.usernameSelector);
         const pass = document.querySelector(options.passwordSelector);
-        if (pass && (user || options.type === "jellyfin")) {
-          if (user) setValue(user, options.username);
+        if (user && pass) {
+          setValue(user, options.username);
           setValue(pass, options.password);
           window.setTimeout(() => {
             const submit = document.querySelector(options.submitSelector);
             if (submit && !submit.disabled) submit.click();
           }, 250);
           return;
-        }
-        if (options.type === "jellyfin") {
-          const controls = [...document.querySelectorAll("button, .card")];
-          const account = controls.find((element) =>
-            element.textContent.trim().toLocaleLowerCase() === options.username.toLocaleLowerCase()
-          );
-          const manual = document.querySelector("#btnManualLogin, .btnManualLogin") || controls.find((element) => {
-            const text = element.textContent.toLocaleLowerCase();
-            return text.includes("manual") && (text.includes("login") || text.includes("sign in"));
-          });
-          if (account) account.click(); else if (manual) manual.click();
         }
         if (attempts < 40) window.setTimeout(fill, 250);
       };
@@ -204,8 +192,14 @@ function showHomeHint() {
 function openNativeApplication(application) {
   if (!application.nativeCommand || nativeChild) return;
 
+  const environment = { ...process.env };
+  if (application.type === "jellyfin" && application.autoLogin?.enable) {
+    environment.HMS_JELLYFIN_USERNAME = application.autoLogin.username;
+    environment.HMS_JELLYFIN_PASSWORD_FILE = application.autoLogin.passwordFile;
+  }
+
   nativeChild = spawn(application.nativeCommand, application.nativeArgs || [], {
-    env: process.env,
+    env: environment,
     stdio: "inherit",
   });
   nativeChild.once("spawn", () => {

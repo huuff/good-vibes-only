@@ -1,0 +1,35 @@
+diff --git a/src/system/SystemComponent.cpp b/src/system/SystemComponent.cpp
+index 8f6183b..9aae0d5 100644
+--- a/src/system/SystemComponent.cpp
++++ b/src/system/SystemComponent.cpp
+@@ -567,6 +567,20 @@ QString SystemComponent::getNativeShellScript()
+     }
+   }
+   clientData.insert("mode", QJsonValue::fromVariant(defaultMode));
++  QString autoLoginUsername = qEnvironmentVariable("HMS_JELLYFIN_USERNAME");
++  QFile autoLoginPasswordFile(qEnvironmentVariable("HMS_JELLYFIN_PASSWORD_FILE"));
++  if (!autoLoginUsername.isEmpty() && autoLoginPasswordFile.open(QIODevice::ReadOnly)) {
++    QString autoLoginPassword = QTextStream(&autoLoginPasswordFile).readAll();
++    while (autoLoginPassword.endsWith('\n') || autoLoginPassword.endsWith('\r')) {
++      autoLoginPassword.chop(1);
++    }
++    QJsonObject autoLogin;
++    autoLogin.insert("username", autoLoginUsername);
++    autoLogin.insert("password", autoLoginPassword);
++    clientData.insert("hmsAutoLogin", autoLogin);
++    qunsetenv("HMS_JELLYFIN_USERNAME");
++    qunsetenv("HMS_JELLYFIN_PASSWORD_FILE");
++  }
+ 
+   QVariantList settingsDescriptionsList = SettingsComponent::Get().settingDescriptions();
+   QVariantMap settingsDescriptions = QVariantMap();
+@@ -598,7 +612,8 @@ QString SystemComponent::getNativeShellScript()
+     ":/web-client/extension/inputPlugin.js",
+     ":/web-client/extension/updatePlugin.js",
+     ":/web-client/extension/connectivityHelper.js",
+-    ":/web-client/extension/nativeshell.js"
++    ":/web-client/extension/nativeshell.js",
++    ":/web-client/extension/hmsAutoLogin.js"
+   };
+ 
+   cachedScript = jmpInfoDeclaration;

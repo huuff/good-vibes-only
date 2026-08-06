@@ -36,6 +36,7 @@
   packages = [
     pkgs.dioxus-cli
     pkgs.lld
+    pkgs.nodejs
   ];
 
   # Build the tally APK and sideload it onto a USB-connected phone
@@ -61,7 +62,11 @@
     check-added-large-files.enable = true;
     check-merge-conflicts.enable = true;
     end-of-file-fixer.enable = true;
-    trim-trailing-whitespace.enable = true;
+    trim-trailing-whitespace = {
+      enable = true;
+      # Unified diffs use a single space to represent blank context lines.
+      excludes = [ "\\.patch$" ];
+    };
 
     # --- static analysis: nix ---
     nixfmt.enable = true; # RFC 166 style; nixfmt >= 1.0 (nixfmt-rfc-style is the deprecated alias)
@@ -75,6 +80,15 @@
     # --- static analysis: shell ---
     shellcheck.enable = true;
     shfmt.enable = true;
+
+    # --- tests: native Jellyfin credential injection ---
+    jellyfin-native-login = {
+      enable = true;
+      name = "native Jellyfin login test";
+      entry = "${pkgs.nodejs}/bin/node --test home-media-system/jellyfin-native-login.test.js";
+      always_run = true;
+      pass_filenames = false;
+    };
 
     # --- commit messages: Conventional Commits (feat:, fix:, chore:, ...) ---
     commitizen.enable = true;

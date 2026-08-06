@@ -8,6 +8,12 @@
 let
   cfg = config.services.home-media-system;
   jsonFormat = pkgs.formats.json { };
+  defaultJellyfinPackage = pkgs.jellyfin-media-player.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [ ./jellyfin-native-login.patch ];
+    postPatch = (old.postPatch or "") + ''
+      cp ${../../home-media-system/jellyfin-native-login.js} native/hmsAutoLogin.js
+    '';
+  });
 
   defaultDescriptions = {
     jellyfin = "Movies & TV from the home server";
@@ -62,7 +68,7 @@ let
         };
 
         autoLogin = {
-          enable = lib.mkEnableOption "runtime form-based login for this application";
+          enable = lib.mkEnableOption "runtime login automation for this application";
 
           username = lib.mkOption {
             type = lib.types.nullOr lib.types.str;
@@ -74,7 +80,7 @@ let
           passwordFile = lib.mkOption {
             type = lib.types.nullOr lib.types.str;
             default = null;
-            example = "/run/secrets/jellyfin-password";
+            example = "/run/secrets/media-password";
             description = ''
               Runtime path containing the password. Point this at a sops-nix
               secret path; its contents are never copied into the Nix store.
@@ -83,20 +89,20 @@ let
 
           usernameSelector = lib.mkOption {
             type = lib.types.str;
-            default = ''input[name="username"], input[name="email"], input[type="email"], #txtManualName'';
-            description = "CSS selector used to locate the login name field.";
+            default = ''input[name="username"], input[name="email"], input[type="email"]'';
+            description = "CSS selector used to locate a web application's login name field.";
           };
 
           passwordSelector = lib.mkOption {
             type = lib.types.str;
-            default = ''input[name="password"], input[type="password"], #txtManualPassword'';
-            description = "CSS selector used to locate the password field.";
+            default = ''input[name="password"], input[type="password"]'';
+            description = "CSS selector used to locate a web application's password field.";
           };
 
           submitSelector = lib.mkOption {
             type = lib.types.str;
             default = ''button[type="submit"], .btnSubmit, form button'';
-            description = "CSS selector used to locate the login button.";
+            description = "CSS selector used to locate a web application's login button.";
           };
         };
       };
@@ -286,9 +292,9 @@ in
 
     jellyfinPackage = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.jellyfin-media-player;
-      defaultText = lib.literalExpression "pkgs.jellyfin-media-player";
-      description = "Official Jellyfin desktop client launched by Jellyfin cards.";
+      default = defaultJellyfinPackage;
+      defaultText = lib.literalExpression "the patched pkgs.jellyfin-media-player";
+      description = "Native Jellyfin desktop client launched by Jellyfin cards.";
     };
 
     user = lib.mkOption {
@@ -391,10 +397,6 @@ in
         lib.optional application.autoLogin.enable {
           assertion = application.autoLogin.username != null && application.autoLogin.passwordFile != null;
           message = "services.home-media-system.applications.${name}: autoLogin requires username and passwordFile";
-        }
-        ++ lib.optional (application.type == "jellyfin" && application.autoLogin.enable) {
-          assertion = false;
-          message = "services.home-media-system.applications.${name}: Jellyfin uses the official desktop client, which manages its own persistent login; autoLogin is only available for web applications";
         }
       ) cfg.applications
     );

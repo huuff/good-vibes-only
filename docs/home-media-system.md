@@ -38,7 +38,10 @@ and power actions.
 
             sops.defaultSopsFile = ./secrets.yaml;
             sops.age.keyFile = "/var/lib/sops-nix/key.txt";
-            sops.secrets.jellyseerr-password.owner = "media";
+            sops.secrets = {
+              jellyfin-password.owner = "media";
+              jellyseerr-password.owner = "media";
+            };
 
             services.home-media-system = {
               enable = true;
@@ -52,6 +55,11 @@ and power actions.
                 jellyfin = {
                   type = "jellyfin";
                   order = 10;
+                  autoLogin = {
+                    enable = true;
+                    username = "media-user";
+                    passwordFile = config.sops.secrets.jellyfin-password.path;
+                  };
                 };
 
                 jellyseerr = {
@@ -87,17 +95,19 @@ remembers it locally. Set `url` declaratively when the appliance should always
 use one managed web server.
 
 The username and password *path* are placed in the generated launcher
-configuration. The launcher reads the password at login time and injects both
-values into the matching login form; the password never enters the Nix store.
-The sops-nix secret must be readable by the configured media user, hence the
-`owner` setting above.
+configuration; the password never enters the Nix store or process environment.
+For Jellyfin, the launcher passes those non-secret values to the native client,
+which reads the password at runtime and performs login inside its own Qt
+WebEngine. Web applications are filled by the launcher itself. The sops-nix
+secret must be readable by the configured media user, hence the `owner` setting
+above.
 
-Web login sessions persist under the media user's state directory, so
-automation normally runs only on the first launch or after a session expires.
-If an installation customizes its web login page, set `usernameSelector`,
-`passwordSelector`, and `submitSelector` under that application's `autoLogin`.
-Jellyfin Desktop manages its own login and persistent session rather than using
-the launcher's form automation.
+If an installation customizes a web application's login page, set
+`usernameSelector`, `passwordSelector`, and `submitSelector` under that
+application's `autoLogin`. These selectors do not apply to Jellyfin: its login
+automation is part of the patched native Jellyfin Desktop package. Both native
+and web sessions persist in the media user's profile, so automation normally
+runs only on the first launch or after a session expires.
 
 The module also enables graphics, PipeWire audio, RTKit, Polkit, and SwayOSD.
 Normal logind policy lets the active local media user suspend, reboot, and power
