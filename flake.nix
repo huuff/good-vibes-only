@@ -66,9 +66,26 @@
               enable = true;
               locale = "en-GB";
               applications = {
-                jellyfin = {
+                jellyfin-home = {
                   type = "jellyfin";
+                  url = "https://jellyfin.example.net";
                   order = 10;
+                  autoLogin = {
+                    enable = true;
+                    username = "home-user";
+                    passwordFile = "/run/secrets/jellyfin-home-password";
+                  };
+                };
+                jellyfin-family = {
+                  name = "Family Jellyfin";
+                  type = "jellyfin";
+                  url = "https://family-jellyfin.example.net";
+                  order = 15;
+                  autoLogin = {
+                    enable = true;
+                    username = "family-user";
+                    passwordFile = "/run/secrets/jellyfin-family-password";
+                  };
                 };
                 jellyseerr = {
                   type = "jellyseerr";

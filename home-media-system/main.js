@@ -193,9 +193,16 @@ function openNativeApplication(application) {
   if (!application.nativeCommand || nativeChild) return;
 
   const environment = { ...process.env };
-  if (application.type === "jellyfin" && application.autoLogin?.enable) {
-    environment.HMS_JELLYFIN_USERNAME = application.autoLogin.username;
-    environment.HMS_JELLYFIN_PASSWORD_FILE = application.autoLogin.passwordFile;
+  if (application.type === "jellyfin") {
+    const dataHome = process.env.XDG_DATA_HOME || path.join(process.env.HOME, ".local", "share");
+    const profileRoot = path.join(dataHome, "home-media-system", "jellyfin", application.nativeProfile);
+    environment.XDG_DATA_HOME = path.join(profileRoot, "data");
+    environment.XDG_CACHE_HOME = path.join(profileRoot, "cache");
+    if (application.url) environment.HMS_JELLYFIN_URL = application.url;
+    if (application.autoLogin?.enable) {
+      environment.HMS_JELLYFIN_USERNAME = application.autoLogin.username;
+      environment.HMS_JELLYFIN_PASSWORD_FILE = application.autoLogin.passwordFile;
+    }
   }
 
   nativeChild = spawn(application.nativeCommand, application.nativeArgs || [], {

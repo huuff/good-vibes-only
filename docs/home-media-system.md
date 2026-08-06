@@ -39,7 +39,8 @@ and power actions.
             sops.defaultSopsFile = ./secrets.yaml;
             sops.age.keyFile = "/var/lib/sops-nix/key.txt";
             sops.secrets = {
-              jellyfin-password.owner = "media";
+              jellyfin-home-password.owner = "media";
+              jellyfin-family-password.owner = "media";
               jellyseerr-password.owner = "media";
             };
 
@@ -52,13 +53,26 @@ and power actions.
               homeHintDurationMs = 4000;
 
               applications = {
-                jellyfin = {
+                jellyfin-home = {
                   type = "jellyfin";
+                  url = "https://jellyfin.example.net";
                   order = 10;
                   autoLogin = {
                     enable = true;
                     username = "media-user";
-                    passwordFile = config.sops.secrets.jellyfin-password.path;
+                    passwordFile = config.sops.secrets.jellyfin-home-password.path;
+                  };
+                };
+
+                jellyfin-family = {
+                  name = "Family Jellyfin";
+                  type = "jellyfin";
+                  url = "https://family-jellyfin.example.net";
+                  order = 15;
+                  autoLogin = {
+                    enable = true;
+                    username = "family-user";
+                    passwordFile = config.sops.secrets.jellyfin-family-password.path;
                   };
                 };
 
@@ -87,27 +101,27 @@ and power actions.
 }
 ```
 
-Jellyfin's `url` setting is ignored because the official client provides its
-own server selection and authentication. It remembers the selected server and
-session in the media user's profile. For web applications such as Jellyseerr,
-`url` is optional: without it, the launcher asks for a server address and
-remembers it locally. Set `url` declaratively when the appliance should always
-use one managed web server.
+Each Jellyfin card has an isolated native client profile, so multiple cards can
+use different server URLs and accounts without sharing sessions. When `url` is
+set, the client enters it on first launch; without it, the client asks for a
+server address and remembers the selection in that card's profile. For web
+applications such as Jellyseerr, `url` has the same optional behavior.
 
 The username and password *path* are placed in the generated launcher
 configuration; the password never enters the Nix store or process environment.
 For Jellyfin, the launcher passes those non-secret values to the native client,
-which reads the password at runtime and performs login inside its own Qt
-WebEngine. Web applications are filled by the launcher itself. The sops-nix
-secret must be readable by the configured media user, hence the `owner` setting
-above.
+which reads the password at runtime, selects the configured server, and performs
+login inside its own Qt WebEngine. Web applications are filled by the launcher
+itself. The sops-nix secret must be readable by the configured media user, hence
+the `owner` setting above.
 
 If an installation customizes a web application's login page, set
 `usernameSelector`, `passwordSelector`, and `submitSelector` under that
 application's `autoLogin`. These selectors do not apply to Jellyfin: its login
-automation is part of the patched native Jellyfin Desktop package. Both native
-and web sessions persist in the media user's profile, so automation normally
-runs only on the first launch or after a session expires.
+automation is part of the patched native Jellyfin Desktop package. Native
+sessions persist separately per card, while web sessions persist in the media
+user's launcher profile, so automation normally runs only on the first launch or
+after a session expires.
 
 The module also enables graphics, PipeWire audio, RTKit, Polkit, and SwayOSD.
 Normal logind policy lets the active local media user suspend, reboot, and power

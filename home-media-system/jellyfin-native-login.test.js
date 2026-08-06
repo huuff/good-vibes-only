@@ -62,3 +62,32 @@ test("native Jellyfin login waits until the asynchronous form is visible", () =>
   timers.shift()();
   assert.equal(submit.clicks, 1);
 });
+
+test("native Jellyfin login selects the configured server before logging in", () => {
+  const submit = {
+    disabled: false,
+    clicks: 0,
+    click() { this.clicks += 1; },
+  };
+  const form = { querySelector: () => submit };
+  const server = new Input(form);
+  server.visible = true;
+  const timers = [];
+  const environment = {
+    Event: class Event {},
+    document: {
+      querySelector(selector) {
+        if (selector.startsWith("#txtServer")) return server;
+        return null;
+      },
+    },
+    setTimeout: (callback) => timers.push(callback),
+  };
+
+  runJellyfinNativeLogin({ url: "https://jellyfin.example.net" }, environment);
+
+  assert.equal(server.value, "https://jellyfin.example.net");
+  assert.equal(submit.clicks, 0);
+  timers.shift()();
+  assert.equal(submit.clicks, 1);
+});

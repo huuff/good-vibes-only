@@ -50,7 +50,8 @@ let
           description = ''
             URL opened when this card is selected. When null, the launcher
             asks for a server address at runtime and remembers it locally.
-            Jellyfin cards use the official client and ignore this option.
+            Jellyfin cards pass this URL to their isolated native client
+            profile on first launch.
           '';
         };
 
@@ -138,6 +139,9 @@ let
         "--fullscreen"
         "--tv"
       ];
+      nativeProfile = lib.optionalString (application.type == "jellyfin") (
+        builtins.substring 0 16 (builtins.hashString "sha256" entry.name)
+      );
       autoLogin = {
         inherit (application.autoLogin)
           enable
@@ -357,9 +361,16 @@ in
       default = { };
       example = lib.literalExpression ''
         {
-          jellyfin = {
+          jellyfin-home = {
             type = "jellyfin";
+            url = "https://jellyfin.example.net";
             order = 10;
+          };
+          jellyfin-family = {
+            name = "Family Jellyfin";
+            type = "jellyfin";
+            url = "https://family-jellyfin.example.net";
+            order = 20;
           };
           youtube = {
             type = "youtube";
