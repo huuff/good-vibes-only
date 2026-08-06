@@ -102,27 +102,25 @@ async function attemptAutoLogin(application) {
   const login = application.autoLogin;
   if (!login || !login.enable) return;
 
-  let username;
   let password;
   try {
-    username = readSecret(login.usernameFile);
     password = readSecret(login.passwordFile);
   } catch (error) {
-    console.error(`Could not read auto-login credentials for ${application.name}:`, error.message);
+    console.error(`Could not read auto-login password for ${application.name}:`, error.message);
     return;
   }
 
   const payload = JSON.stringify({
     type: application.type,
-    username,
+    username: login.username,
     password,
     usernameSelector: login.usernameSelector,
     passwordSelector: login.passwordSelector,
     submitSelector: login.submitSelector,
   });
 
-  // Credentials are read at runtime and only injected into the selected login
-  // page. They are never part of the generated Nix store configuration.
+  // The password is read at runtime and only injected into the selected login
+  // page. It is never part of the generated Nix store configuration.
   await window.webContents.executeJavaScript(`
     (() => {
       const options = ${payload};

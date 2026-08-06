@@ -64,14 +64,11 @@ let
         autoLogin = {
           enable = lib.mkEnableOption "runtime form-based login for this application";
 
-          usernameFile = lib.mkOption {
+          username = lib.mkOption {
             type = lib.types.nullOr lib.types.str;
             default = null;
-            example = "/run/secrets/jellyfin-username";
-            description = ''
-              Runtime path containing the username. Point this at a sops-nix
-              secret path; its contents are never copied into the Nix store.
-            '';
+            example = "media-user";
+            description = "Username entered into the login form.";
           };
 
           passwordFile = lib.mkOption {
@@ -138,7 +135,7 @@ let
       autoLogin = {
         inherit (application.autoLogin)
           enable
-          usernameFile
+          username
           passwordFile
           usernameSelector
           passwordSelector
@@ -392,9 +389,8 @@ in
       lib.mapAttrsToList (
         name: application:
         lib.optional application.autoLogin.enable {
-          assertion =
-            application.autoLogin.usernameFile != null && application.autoLogin.passwordFile != null;
-          message = "services.home-media-system.applications.${name}: autoLogin requires usernameFile and passwordFile";
+          assertion = application.autoLogin.username != null && application.autoLogin.passwordFile != null;
+          message = "services.home-media-system.applications.${name}: autoLogin requires username and passwordFile";
         }
         ++ lib.optional (application.type == "jellyfin" && application.autoLogin.enable) {
           assertion = false;

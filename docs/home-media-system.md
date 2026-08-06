@@ -38,10 +38,7 @@ and power actions.
 
             sops.defaultSopsFile = ./secrets.yaml;
             sops.age.keyFile = "/var/lib/sops-nix/key.txt";
-            sops.secrets = {
-              jellyseerr-username.owner = "media";
-              jellyseerr-password.owner = "media";
-            };
+            sops.secrets.jellyseerr-password.owner = "media";
 
             services.home-media-system = {
               enable = true;
@@ -63,7 +60,7 @@ and power actions.
                   order = 20;
                   autoLogin = {
                     enable = true;
-                    usernameFile = config.sops.secrets.jellyseerr-username.path;
+                    username = "media-user";
                     passwordFile = config.sops.secrets.jellyseerr-password.path;
                   };
                 };
@@ -89,10 +86,11 @@ session in the media user's profile. For web applications such as Jellyseerr,
 remembers it locally. Set `url` declaratively when the appliance should always
 use one managed web server.
 
-Only secret *paths* are placed in the generated launcher configuration. The
-launcher reads their contents at login time and injects them into the matching
-login form; the contents never enter the Nix store. The sops-nix secrets must be
-readable by the configured media user, hence the `owner` settings above.
+The username and password *path* are placed in the generated launcher
+configuration. The launcher reads the password at login time and injects both
+values into the matching login form; the password never enters the Nix store.
+The sops-nix secret must be readable by the configured media user, hence the
+`owner` setting above.
 
 Web login sessions persist under the media user's state directory, so
 automation normally runs only on the first launch or after a session expires.
