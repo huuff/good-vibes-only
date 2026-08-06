@@ -526,6 +526,10 @@ button:disabled {
 .sheet {
   width: 100%;
   max-width: 28rem;
+  max-height: calc(100dvh - env(safe-area-inset-top));
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
   background: var(--bg);
   border-top: 2px solid var(--text);
   padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
@@ -895,6 +899,7 @@ button:disabled {
   }
 
   .sheet {
+    max-height: calc(100dvh - 32px);
     border: 2px solid var(--text);
   }
 }
