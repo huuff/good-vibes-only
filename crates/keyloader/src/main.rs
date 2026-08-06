@@ -33,6 +33,9 @@ enum Command {
         /// Print what would happen without changing anything
         #[arg(long)]
         dry_run: bool,
+        /// Reload keys even when they are already available locally
+        #[arg(long)]
+        force: bool,
     },
 }
 
@@ -41,7 +44,7 @@ fn main() -> ExitCode {
     let result = match cli.command {
         Command::Discover => discover(),
         Command::Status => status(),
-        Command::Load { dry_run } => load(dry_run),
+        Command::Load { dry_run, force } => load(dry_run, force),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -311,7 +314,7 @@ fn status() -> Result<()> {
     Ok(())
 }
 
-fn load(dry_run: bool) -> Result<()> {
+fn load(dry_run: bool, force: bool) -> Result<()> {
     let mut cached_items = load_cache()?;
     let mut failures = 0;
     let mut changed = false;
@@ -321,7 +324,7 @@ fn load(dry_run: bool) -> Result<()> {
 
     let loaded = ssh::loaded_fingerprints()?;
     for item in &cached_items.ssh {
-        match load_ssh_item(item, &loaded, dry_run) {
+        match load_ssh_item(item, &loaded, dry_run, force) {
             Ok((msg, loaded_now)) => {
                 if loaded_now {
                     cached_items
@@ -351,7 +354,7 @@ fn load(dry_run: bool) -> Result<()> {
     let mut learned = false;
     for item in &mut cached_items.gpg {
         let had_fingerprint = item.fingerprint.is_some();
-        match load_gpg_item(item, &cached_grips, dry_run) {
+        match load_gpg_item(item, &cached_grips, dry_run, force) {
             Ok((msg, preset_grips)) => {
                 if !preset_grips.is_empty() {
                     let preset_at = cache::now();
@@ -399,24 +402,41 @@ fn load_ssh_item(
     item: &cache::Item,
     loaded: &HashSet<String>,
     dry_run: bool,
+    force: bool,
 ) -> Result<(&'static str, bool)> {
-    if let Some(fpr) = &item.fingerprint
+    if !force
+        && let Some(fpr) = &item.fingerprint
         && loaded.contains(fpr)
     {
         return Ok(("already loaded", false));
     }
     if dry_run {
-        return Ok(("would add to ssh-agent", false));
+        return Ok((
+            if force {
+                "would re-add to ssh-agent"
+            } else {
+                "would add to ssh-agent"
+            },
+            false,
+        ));
     }
     let key = op::read_ssh_private_key(&item.summary.vault.id, &item.summary.id)?;
     ssh::add_key(&key)?;
-    Ok(("added to ssh-agent", true))
+    Ok((
+        if force {
+            "re-added to ssh-agent"
+        } else {
+            "added to ssh-agent"
+        },
+        true,
+    ))
 }
 
 fn load_gpg_item(
     item: &mut cache::Item,
     cached_grips: &HashSet<String>,
     dry_run: bool,
+    force: bool,
 ) -> Result<(String, Vec<String>)> {
     let known = item
         .fingerprint
@@ -425,10 +445,40 @@ fn load_gpg_item(
         .transpose()?
         .flatten();
 
-    let (key, mut done) = match known {
-        Some(key) => (Some(key), "already in keyring".to_string()),
-        None if dry_run => return Ok(("would import into keyring".to_string(), Vec::new())),
-        None => {
+    let (key, mut done) = match (known, force) {
+        (known, true) if dry_run => {
+            let action = if known.is_some() {
+                "would re-import into keyring"
+            } else {
+                "would import into keyring"
+            };
+            (known, action.to_string())
+        }
+        (_, true) => {
+            let armored =
+                op::reveal_field(&item.summary.id, op::FIELD_SECRET_KEY)?.with_context(|| {
+                    format!("item has no `{}` field to import", op::FIELD_SECRET_KEY)
+                })?;
+            let imported = gpg::import(&armored)?;
+            let done = match &item.fingerprint {
+                Some(declared) if !declared.eq_ignore_ascii_case(&imported) => bail!(
+                    "imported key {imported} but the item's `{}` field says {declared}; \
+                     fix or remove the field, then re-run `keyloader discover`",
+                    op::FIELD_FINGERPRINT
+                ),
+                Some(_) => "re-imported into keyring".to_string(),
+                None => {
+                    item.fingerprint = Some(imported.clone());
+                    format!("imported into keyring, learned fingerprint {imported}")
+                }
+            };
+            (gpg::secret_key(&imported)?, done)
+        }
+        (Some(key), false) => (Some(key), "already in keyring".to_string()),
+        (None, false) if dry_run => {
+            return Ok(("would import into keyring".to_string(), Vec::new()));
+        }
+        (None, false) => {
             let armored =
                 op::reveal_field(&item.summary.id, op::FIELD_SECRET_KEY)?.with_context(|| {
                     format!("item has no `{}` field to import", op::FIELD_SECRET_KEY)
@@ -454,12 +504,12 @@ fn load_gpg_item(
     let Some(key) = key.filter(|k| !k.keygrips.is_empty()) else {
         return Ok((done, Vec::new()));
     };
-    let uncached: Vec<&String> = key
+    let grips_to_preset: Vec<&String> = key
         .keygrips
         .iter()
-        .filter(|grip| !cached_grips.contains(*grip))
+        .filter(|grip| force || !cached_grips.contains(*grip))
         .collect();
-    if uncached.is_empty() {
+    if grips_to_preset.is_empty() {
         done.push_str(", passphrase already cached");
         return Ok((done, Vec::new()));
     }
@@ -470,16 +520,45 @@ fn load_gpg_item(
     if dry_run {
         done.push_str(&format!(
             ", would preset passphrase for {} keygrip(s)",
-            uncached.len()
+            grips_to_preset.len()
         ));
         return Ok((done, Vec::new()));
     }
-    for grip in &uncached {
+    for grip in &grips_to_preset {
         gpg::preset_passphrase(grip, &passphrase)?;
     }
     done.push_str(&format!(
         ", passphrase preset for {} keygrip(s)",
-        uncached.len()
+        grips_to_preset.len()
     ));
-    Ok((done, uncached.into_iter().cloned().collect()))
+    Ok((done, grips_to_preset.into_iter().cloned().collect()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_force_for_load() {
+        let cli = Cli::try_parse_from(["keyloader", "load", "--force"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Load {
+                dry_run: false,
+                force: true
+            }
+        ));
+    }
+
+    #[test]
+    fn parses_force_with_dry_run() {
+        let cli = Cli::try_parse_from(["keyloader", "load", "--dry-run", "--force"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Load {
+                dry_run: true,
+                force: true
+            }
+        ));
+    }
 }

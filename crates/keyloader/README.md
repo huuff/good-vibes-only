@@ -8,6 +8,7 @@ material to disk.
 $ keyloader discover   # fetch the key list from 1Password, cache it locally
 $ keyloader status     # which of those keys are already usable locally
 $ keyloader load       # import/add whatever is missing (safe to re-run)
+$ keyloader load --force # reload every key, refreshing agent state
 $ keyloader load --dry-run
 ```
 
@@ -31,7 +32,8 @@ instead of listing items through `op`, so:
   by another program have an unknown countdown.
 - `load` contacts 1Password only to fetch the secrets of keys that are
   actually missing; when everything is already loaded it makes no `op`
-  calls at all.
+  calls at all. Pass `--force` to fetch and reload every key, including
+  re-adding SSH keys and re-importing GPG keys and their passphrases.
 
 The cache never refreshes implicitly: re-run `keyloader discover` after
 adding, removing or rotating keys in 1Password. Both commands tell you
