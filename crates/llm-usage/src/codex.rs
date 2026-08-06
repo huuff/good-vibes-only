@@ -23,7 +23,7 @@ use crate::report::{Report, Window};
 const MAX_FILES: usize = 20;
 /// JSON-RPC id we use for the rate-limits request.
 const RATE_LIMITS_ID: i64 = 2;
-const RPC_TIMEOUT: Duration = Duration::from_secs(20);
+const RPC_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
 pub struct Snapshot {

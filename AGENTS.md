@@ -3,6 +3,9 @@
 A cargo workspace hosting small, independent vibe-coded Rust projects,
 plus reusable Nix modules under `nix/`.
 
+- Put Git worktrees under `.wt/<name>/`; `.wt/` already exists and ignores its
+  contents.
+
 - Each project is a workspace member under `crates/`. Start a new one with
   `cargo new crates/<name>` — the root `Cargo.toml` picks it up via glob.
 - New crates inherit `version`, `edition`, and `license` from

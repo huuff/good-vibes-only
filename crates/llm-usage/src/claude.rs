@@ -2,6 +2,7 @@
 //! queries the same endpoint the in-app `/usage` screen uses.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use jiff::Timestamp;
@@ -10,6 +11,7 @@ use serde::Deserialize;
 use crate::report::{Report, Window};
 
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
 pub struct Credentials {
@@ -122,6 +124,7 @@ pub fn report() -> Result<Report> {
 
 fn fetch_usage(token: &str) -> Result<String> {
     let response = ureq::get(USAGE_URL)
+        .timeout(REQUEST_TIMEOUT)
         .set("Authorization", &format!("Bearer {token}"))
         .set("anthropic-beta", "oauth-2025-04-20")
         .call();
