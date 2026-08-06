@@ -16,6 +16,20 @@ let
         gitFlags=()
         if gitCommonDir=$(${lib.getExe pkgs.git} rev-parse --path-format=absolute --git-common-dir 2>/dev/null); then
           gitFlags=(--allow "$gitCommonDir")
+
+          # Cargo searches every ancestor of the current directory for
+          # .cargo/config.toml. For a worktree nested inside its main
+          # checkout, that search enters the otherwise-blocked main checkout
+          # before reaching the filesystem root. Make that ancestor readable,
+          # while retaining read+write access only for Git's shared metadata.
+          if gitWorktree=$(${lib.getExe pkgs.git} rev-parse --path-format=absolute --show-toplevel 2>/dev/null); then
+            gitMainWorktree="''${gitCommonDir%/*}"
+            if [[ "''${gitCommonDir##*/}" == .git && "$gitMainWorktree" != / && "$gitWorktree" != "$gitMainWorktree" ]]; then
+              case "$gitWorktree/" in
+                "$gitMainWorktree/"*) gitFlags+=(--read "$gitMainWorktree") ;;
+              esac
+            fi
+          fi
         fi
       ''}
       exec ${lib.getExe cfg.package} run \
@@ -82,9 +96,11 @@ in
               description = ''
                 Grant read+write access to `git rev-parse --git-common-dir`
                 at launch, so agents running in a linked worktree can reach
-                the shared `.git` directory. No-op outside a git repository,
-                and in a main worktree the common dir is `./.git`, already
-                inside the CWD.
+                the shared `.git` directory. If the linked worktree is nested
+                inside the main checkout, also grant read-only access to the
+                main checkout so ancestor-based config discovery (such as
+                Cargo's) does not fail. No-op outside a git repository; in a
+                main worktree the common dir is already inside the CWD.
               '';
             };
 
