@@ -3,6 +3,15 @@ function runJellyfinNativeLogin(options, environment = globalThis) {
   let attempts = 0;
 
   const isVisible = (element) => element && element.getClientRects().length > 0;
+  const queryFirst = (selectors) => {
+    let firstMatch;
+    for (const selector of selectors) {
+      const element = document.querySelector(selector);
+      if (element && !firstMatch) firstMatch = element;
+      if (isVisible(element)) return element;
+    }
+    return firstMatch;
+  };
   const setValue = (element, value) => {
     const setter = Object.getOwnPropertyDescriptor(
       Object.getPrototypeOf(element), "value"
@@ -13,9 +22,12 @@ function runJellyfinNativeLogin(options, environment = globalThis) {
   };
   const fill = () => {
     attempts += 1;
-    const server = document.querySelector(
-      "#address, #txtServer, input[autocomplete='url'], input[type='url']"
-    );
+    const server = queryFirst([
+      "#address",
+      "#txtServer",
+      "input[autocomplete='url']",
+      "input[type='url']",
+    ]);
     if (options.url && isVisible(server)) {
       setValue(server, options.url);
       environment.setTimeout(() => {
@@ -36,15 +48,31 @@ function runJellyfinNativeLogin(options, environment = globalThis) {
       return;
     }
 
-    const username = document.querySelector("#txtManualName, input[autocomplete='username']");
-    const password = document.querySelector("#txtManualPassword, input[autocomplete='current-password']");
+    const username = queryFirst([
+      "#txtManualName",
+      "#login-username",
+      "input[autocomplete='username']",
+      "input[name='username']",
+    ]);
+    const password = queryFirst([
+      "#txtManualPassword",
+      "#login-password",
+      "input[autocomplete='current-password']",
+      "input[name='password']",
+    ]);
 
     if (isVisible(username) && isVisible(password)) {
       setValue(username, options.username);
       setValue(password, options.password);
       environment.setTimeout(() => {
-        const submit = username.closest("form")?.querySelector("button[type='submit']");
-        if (submit && !submit.disabled) submit.click();
+        const submit = username.closest("form")?.querySelector(
+          "#login-button, button[type='submit'], .btnSubmit"
+        ) || document.querySelector("#login-button, .btnSubmit");
+        if (submit && !submit.disabled) {
+          submit.click();
+          options.username = undefined;
+          options.password = undefined;
+        }
       }, 250);
       return;
     }

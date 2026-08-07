@@ -19,7 +19,7 @@ class Input {
   getClientRects() { return this.visible ? [{}] : []; }
 }
 
-test("native Jellyfin login waits until the asynchronous form is visible", () => {
+test("native Jellyfin login supports the legacy login form after it becomes visible", () => {
   const submit = {
     disabled: false,
     clicks: 0,
@@ -33,8 +33,8 @@ test("native Jellyfin login waits until the asynchronous form is visible", () =>
     Event: class Event {},
     document: {
       querySelector(selector) {
-        if (selector.startsWith("#txtManualName")) return username;
-        if (selector.startsWith("#txtManualPassword")) return password;
+        if (selector === "#txtManualName") return username;
+        if (selector === "#txtManualPassword") return password;
         return null;
       },
       querySelectorAll: () => [],
@@ -66,41 +66,74 @@ test("native Jellyfin login waits until the asynchronous form is visible", () =>
   assert.equal(submit.clicks, 1);
 });
 
-test("native Jellyfin login connects through Jellyfin Desktop 2.0's text address field", () => {
-  const submit = {
+test("native Jellyfin login connects through Desktop 2.0 then auto-logs in", () => {
+  const connect = {
+    disabled: false,
+    clicks: 0,
+    click() {
+      this.clicks += 1;
+      server.visible = false;
+      username.visible = true;
+      password.visible = true;
+    },
+  };
+  const login = {
     disabled: false,
     clicks: 0,
     click() { this.clicks += 1; },
   };
-  const form = {
+  const connectForm = {
     querySelector(selector) {
       return selector.split(",").map((part) => part.trim()).includes("#connect-button")
-        ? submit
+        ? connect
         : null;
     },
   };
-  const server = new Input(form, { id: "address", type: "text" });
+  const loginForm = {
+    querySelector(selector) {
+      return selector.split(",").map((part) => part.trim()).includes("#login-button")
+        ? login
+        : null;
+    },
+  };
+  const server = new Input(connectForm, { id: "address", type: "text" });
+  const username = new Input(loginForm, { id: "login-username" });
+  const password = new Input(loginForm, { id: "login-password", type: "password" });
   server.visible = true;
   const timers = [];
   const environment = {
     Event: class Event {},
     document: {
       querySelector(selector) {
-        const selectors = selector.split(",").map((part) => part.trim());
-        if (selectors.includes(`#${server.id}`)) return server;
+        if (selector === `#${server.id}`) return server;
+        if (selector === `#${username.id}`) return username;
+        if (selector === `#${password.id}`) return password;
         return null;
       },
+      querySelectorAll: () => [],
     },
     setTimeout: (callback) => timers.push(callback),
   };
 
-  runJellyfinNativeLogin({ url: "https://jellyfin.example.net" }, environment);
+  runJellyfinNativeLogin({
+    url: "https://jellyfin.example.net",
+    username: "media-user",
+    password: "test-password",
+  }, environment);
 
   assert.equal(server.type, "text");
   assert.equal(server.value, "https://jellyfin.example.net");
-  assert.equal(submit.clicks, 0);
+  assert.equal(connect.clicks, 0);
   timers.shift()();
-  assert.equal(submit.clicks, 1);
+  assert.equal(connect.clicks, 1);
+
+  timers.shift()();
+  assert.equal(username.value, "media-user");
+  assert.equal(password.value, "test-password");
+  assert.equal(login.clicks, 0);
+
+  timers.shift()();
+  assert.equal(login.clicks, 1);
 });
 
 test("native Jellyfin login remains compatible with the old connect screen", () => {
@@ -121,8 +154,7 @@ test("native Jellyfin login remains compatible with the old connect screen", () 
     Event: class Event {},
     document: {
       querySelector(selector) {
-        const selectors = selector.split(",").map((part) => part.trim());
-        return selectors.includes("#txtServer") ? server : null;
+        return selector === "#txtServer" ? server : null;
       },
     },
     setTimeout: (callback) => timers.push(callback),
