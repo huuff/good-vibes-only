@@ -198,6 +198,9 @@ function openNativeApplication(application) {
     const profileRoot = path.join(dataHome, "home-media-system", "jellyfin", application.nativeProfile);
     environment.XDG_DATA_HOME = path.join(profileRoot, "data");
     environment.XDG_CACHE_HOME = path.join(profileRoot, "cache");
+    // Nix store timestamps are all epoch, so Qt's QML disk cache never
+    // invalidates and stale compiled QML masks patched webview.qml.
+    environment.QML_DISABLE_DISK_CACHE = "1";
     if (application.url) environment.HMS_JELLYFIN_URL = application.url;
     if (application.autoLogin?.enable) {
       environment.HMS_JELLYFIN_USERNAME = application.autoLogin.username;
