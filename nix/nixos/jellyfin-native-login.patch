@@ -35,13 +35,13 @@ index 8f6183b..9aae0d5 100644
  
    QVariantList settingsDescriptionsList = SettingsComponent::Get().settingDescriptions();
    QVariantMap settingsDescriptions = QVariantMap();
-@@ -598,7 +624,8 @@ QString SystemComponent::getNativeShellScript()
-     ":/web-client/extension/inputPlugin.js",
-     ":/web-client/extension/updatePlugin.js",
-     ":/web-client/extension/connectivityHelper.js",
--    ":/web-client/extension/nativeshell.js"
-+    ":/web-client/extension/nativeshell.js",
-+    ":/web-client/extension/hmsAutoLogin.js"
+@@ -602,6 +628,9 @@ QString SystemComponent::getNativeShellScript()
    };
  
    cachedScript = jmpInfoDeclaration;
++  // Keep HMS bootstrap independent of failures in upstream extension scripts.
++  cachedScript += loadScript(":/web-client/extension/hmsAutoLogin.js") + "\n";
++
+   for (const QString& scriptPath : scriptPaths) {
+     cachedScript += loadScript(scriptPath) + "\n";
+   }
