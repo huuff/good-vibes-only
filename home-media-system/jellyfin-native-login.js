@@ -13,12 +13,15 @@ function runJellyfinNativeLogin(options, environment = globalThis) {
   };
   const fill = () => {
     attempts += 1;
-    const server = document.querySelector("#txtServer, input[autocomplete='url'], input[type='url']");
+    const server = document.querySelector(
+      "#address, #txtServer, input[autocomplete='url'], input[type='url']"
+    );
     if (options.url && isVisible(server)) {
       setValue(server, options.url);
       environment.setTimeout(() => {
-        const submit = server.closest("form")?.querySelector("button[type='submit']")
-          || document.querySelector(".btnConnect");
+        const submit = server.closest("form")?.querySelector(
+          "#connect-button, button[type='submit']"
+        ) || document.querySelector("#connect-button, .btnConnect");
         if (submit && !submit.disabled) {
           submit.click();
           options.url = undefined;
