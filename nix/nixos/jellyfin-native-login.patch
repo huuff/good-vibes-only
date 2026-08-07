@@ -45,3 +45,19 @@ index 8f6183b..9aae0d5 100644
    for (const QString& scriptPath : scriptPaths) {
      cachedScript += loadScript(scriptPath) + "\n";
    }
+diff --git a/src/ui/webview.qml b/src/ui/webview.qml
+index 3cbca11..219c2d9 100644
+--- a/src/ui/webview.qml
++++ b/src/ui/webview.qml
+@@ -273,6 +273,11 @@ WebEngineView
+       else if (loadingInfo.status == WebEngineView.LoadSucceededStatus)
+       {
+         console.log("WebEngineLoadRequest success: " + loadingInfo.url);
++        if (/^https?:/.test(loadingInfo.url.toString()))
++        {
++          console.log("HMS: injecting native shell into remote page");
++          web.runJavaScript(components.system.getNativeShellScript());
++        }
+       }
+       else if (loadingInfo.status == WebEngineView.LoadFailedStatus)
+       {

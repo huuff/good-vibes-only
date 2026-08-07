@@ -21,6 +21,8 @@ stdenvNoCC.mkDerivation {
   checkPhase = ''
     runHook preCheck
     node --test jellyfin-native-login.test.js
+    grep -Fq 'web.runJavaScript(components.system.getNativeShellScript())' \
+      ${../nixos/jellyfin-native-login.patch}
     runHook postCheck
   '';
 
