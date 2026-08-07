@@ -48,7 +48,10 @@
     exec = ''
       cd "$DEVENV_ROOT/crates/tally"
       dx build --platform android --release --target aarch64-linux-android
-      apk=$(find "$DEVENV_ROOT/target/dx/tally" -name '*.apk' | head -n1)
+      android_app="$DEVENV_ROOT/target/dx/tally/release/android/app"
+      cp -R android/res/. "$android_app/app/src/main/res/"
+      "$android_app/gradlew" -p "$android_app" assembleDebug
+      apk="$android_app/app/build/outputs/apk/debug/app-debug.apk"
       adb install -r "$apk"
     '';
   };

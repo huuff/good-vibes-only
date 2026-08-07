@@ -3,3 +3,4 @@
 [bundle]
 identifier = "com.huuff.tally"
 publisher = "huuff"
+icon = ["web/icon-512.png"]

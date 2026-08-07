@@ -69,13 +69,19 @@ Or by hand, from `crates/tally`:
 
 ```sh
 dx build --platform android --release --target aarch64-linux-android
-find ../../target/dx/tally -name '*.apk'
+android_app=../../target/dx/tally/release/android/app
+cp -R android/res/. "$android_app/app/src/main/res/"
+"$android_app/gradlew" -p "$android_app" assembleDebug
 ```
+
+The copy-and-reassemble step applies TALLY's launcher icon after Dioxus
+generates its Android project. Dioxus 0.7 currently parses the configured
+bundle icon but still writes its stock Android resources during APK builds.
 
 The explicit `--target` matters: without it dx assumes an emulator
 (x86_64) and tries to rustup-install that target, which the nix
 toolchain can't do. The APK lands under
-`target/dx/tally/release/android/.../outputs/apk/debug/app-debug.apk` —
+`target/dx/tally/release/android/app/app/build/outputs/apk/debug/app-debug.apk` —
 Gradle's *debug variant*, but the Rust inside is the release build, and
 it's debug-signed, which is exactly what sideloading wants.
 
