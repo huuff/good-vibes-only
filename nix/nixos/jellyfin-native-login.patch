@@ -2,7 +2,7 @@ diff --git a/src/system/SystemComponent.cpp b/src/system/SystemComponent.cpp
 index 8f6183b..9aae0d5 100644
 --- a/src/system/SystemComponent.cpp
 +++ b/src/system/SystemComponent.cpp
-@@ -567,6 +567,25 @@ QString SystemComponent::getNativeShellScript()
+@@ -567,6 +567,32 @@ QString SystemComponent::getNativeShellScript()
      }
    }
    clientData.insert("mode", QJsonValue::fromVariant(defaultMode));
@@ -12,7 +12,14 @@ index 8f6183b..9aae0d5 100644
 +  if (!serverUrl.isEmpty()) {
 +    clientData.insert("hmsServerUrl", serverUrl);
 +  }
-+  if (!autoLoginUsername.isEmpty() && autoLoginPasswordFile.open(QIODevice::ReadOnly)) {
++  bool autoLoginPasswordReadable = !autoLoginUsername.isEmpty()
++    && autoLoginPasswordFile.open(QIODevice::ReadOnly);
++  if (!serverUrl.isEmpty() || !autoLoginUsername.isEmpty()) {
++    qInfo() << "HMS bootstrap configured - server:" << !serverUrl.isEmpty()
++            << "auto-login:" << !autoLoginUsername.isEmpty()
++            << "password readable:" << autoLoginPasswordReadable;
++  }
++  if (autoLoginPasswordReadable) {
 +    QString autoLoginPassword = QTextStream(&autoLoginPasswordFile).readAll();
 +    while (autoLoginPassword.endsWith('\n') || autoLoginPassword.endsWith('\r')) {
 +      autoLoginPassword.chop(1);
@@ -28,7 +35,7 @@ index 8f6183b..9aae0d5 100644
  
    QVariantList settingsDescriptionsList = SettingsComponent::Get().settingDescriptions();
    QVariantMap settingsDescriptions = QVariantMap();
-@@ -598,7 +617,8 @@ QString SystemComponent::getNativeShellScript()
+@@ -598,7 +624,8 @@ QString SystemComponent::getNativeShellScript()
      ":/web-client/extension/inputPlugin.js",
      ":/web-client/extension/updatePlugin.js",
      ":/web-client/extension/connectivityHelper.js",
