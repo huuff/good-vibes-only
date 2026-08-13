@@ -1,0 +1,16 @@
+# Hayagriva bibliography — cite in prose with @key
+# Docs: https://github.com/typst/hayagriva/blob/main/docs/file-format.md
+knuth-taocp:
+  type: book
+  title: The Art of Computer Programming
+  author: Knuth, Donald E.
+  date: 1997
+  publisher: Addison-Wesley
+
+rfc2119:
+  type: report
+  title: Key words for use in RFCs to Indicate Requirement Levels
+  author: Bradner, Scott
+  date: 1997
+  serial-number: RFC 2119
+  url: https://www.rfc-editor.org/rfc/rfc2119
