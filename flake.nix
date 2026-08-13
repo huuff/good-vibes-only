@@ -26,6 +26,7 @@
       crane,
       home-manager,
       codex,
+      ...
     }:
     let
       inherit (nixpkgs) lib;
