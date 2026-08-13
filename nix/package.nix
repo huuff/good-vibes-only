@@ -1,34 +1,20 @@
 {
-  rustPlatform,
+  cargoArtifacts,
+  craneLib,
   lib,
   crate,
+  src,
 }:
 
-rustPlatform.buildRustPackage {
+craneLib.buildPackage {
   pname = crate;
   version = "0.1.0";
 
-  # Only the cargo workspace files — commits touching nix/, docs, etc.
-  # don't invalidate the build.
-  src = lib.fileset.toSource {
-    root = ../.;
-    fileset = lib.fileset.unions [
-      ../Cargo.toml
-      ../Cargo.lock
-      ../crates
-    ];
-  };
+  inherit cargoArtifacts src;
+  strictDeps = true;
 
-  cargoLock.lockFile = ../Cargo.lock;
-
-  cargoBuildFlags = [
-    "-p"
-    crate
-  ];
-  cargoTestFlags = [
-    "-p"
-    crate
-  ];
+  cargoExtraArgs = "-p ${crate}";
+  cargoTestExtraArgs = "-p ${crate}";
 
   meta = {
     description = "${crate} from the good-vibes-only workspace";

@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    crane.url = "github:ipetkov/crane";
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -13,6 +14,7 @@
     {
       self,
       nixpkgs,
+      crane,
       home-manager,
     }:
     let
@@ -38,7 +40,41 @@
       # One package per workspace crate, built with `cargo build -p <crate>`.
       crates = lib.attrNames (lib.filterAttrs (_: t: t == "directory") (builtins.readDir ./crates));
       cratePackages =
-        pkgs: lib.genAttrs crates (crate: pkgs.callPackage ./nix/package.nix { inherit crate; });
+        pkgs:
+        let
+          craneLib = crane.mkLib pkgs;
+          workspaceSrc = craneLib.cleanCargoSource ./.;
+
+          # Compile third-party dependencies once and reuse the resulting Cargo
+          # target directory for every crate package. This derivation depends on
+          # Cargo manifests and Cargo.lock, but not on Rust source changes.
+          cargoArtifacts = craneLib.buildDepsOnly {
+            src = workspaceSrc;
+            pname = "good-vibes-only-workspace";
+            version = "0.1.0";
+            strictDeps = true;
+          };
+        in
+        lib.genAttrs crates (
+          crate:
+          pkgs.callPackage ./nix/package.nix {
+            # Keep non-Rust crate assets (for example tally's fonts), while
+            # excluding every other crate so unrelated edits stay cached.
+            src = lib.fileset.toSource {
+              root = ./.;
+              fileset = lib.fileset.unions [
+                ./Cargo.toml
+                ./Cargo.lock
+                (./crates + "/${crate}")
+              ];
+            };
+            inherit
+              cargoArtifacts
+              craneLib
+              crate
+              ;
+          }
+        );
     in
     {
       packages = forAllSystems (pkgs: cratePackages pkgs // extraPackages pkgs);
