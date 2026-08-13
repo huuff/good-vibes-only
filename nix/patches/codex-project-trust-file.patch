@@ -1,18 +1,31 @@
+diff --git a/codex-rs/tui/Cargo.toml b/codex-rs/tui/Cargo.toml
+index 0b67681..00678ac 100644
+--- a/codex-rs/tui/Cargo.toml
++++ b/codex-rs/tui/Cargo.toml
+@@ -35,5 +35,6 @@ codex-cloud-config = { workspace = true }
+ codex-config = { workspace = true }
+ codex-connectors = { workspace = true }
++codex-core = { workspace = true }
+ codex-core-plugins = { workspace = true }
+ codex-exec-server = { workspace = true }
+ codex-features = { workspace = true }
 diff --git a/codex-rs/config/src/lib.rs b/codex-rs/config/src/lib.rs
+index df3e45d..23b354b 100644
 --- a/codex-rs/config/src/lib.rs
 +++ b/codex-rs/config/src/lib.rs
-@@ -34,6 +34,7 @@ mod tui_keymap;
+@@ -32,6 +32,7 @@ mod tui_keymap;
  pub mod types;
 
  pub const CONFIG_TOML_FILE: &str = "config.toml";
 +pub const PROJECT_TRUST_TOML_FILE: &str = "project-trust.toml";
 
- pub use auth_policy::ManagedAuthPolicy;
  pub use cloud_config_bundle::CloudConfigBundle;
+ pub use cloud_config_bundle::CloudConfigBundleLayers;
 diff --git a/codex-rs/config/src/loader/mod.rs b/codex-rs/config/src/loader/mod.rs
+index 00110bc..73b86d0 100644
 --- a/codex-rs/config/src/loader/mod.rs
 +++ b/codex-rs/config/src/loader/mod.rs
-@@ -9,6 +9,7 @@ use self::layer_io::LoadedConfigLayers;
+@@ -8,6 +8,7 @@ use self::layer_io::LoadedConfigLayers;
  use crate::CONFIG_TOML_FILE;
  use crate::CloudConfigBundleLayers;
  use crate::ConfigLayerSource;
@@ -20,7 +33,7 @@ diff --git a/codex-rs/config/src/loader/mod.rs b/codex-rs/config/src/loader/mod.
  use crate::ProfileV2Name;
  use crate::RequirementsLayerEntry;
  use crate::compose_requirements;
-@@ -46,6 +47,7 @@ use codex_utils_absolute_path::AbsolutePathBufGuard;
+@@ -43,6 +44,7 @@ use codex_utils_absolute_path::AbsolutePathBufGuard;
  use codex_utils_path_uri::PathUri;
  use dunce::canonicalize as normalize_path;
  use serde::Deserialize;
@@ -28,7 +41,7 @@ diff --git a/codex-rs/config/src/loader/mod.rs b/codex-rs/config/src/loader/mod.
  use std::io;
  use std::path::Path;
  #[cfg(windows)]
-@@ -352,6 +354,28 @@ pub async fn load_config_layers_state(
+@@ -288,6 +290,28 @@ pub async fn load_config_layers_state(
          );
      }
 
@@ -38,26 +51,26 @@ diff --git a/codex-rs/config/src/loader/mod.rs b/codex-rs/config/src/loader/mod.
 +    let project_trust_file =
 +        AbsolutePathBuf::resolve_path_against_base(PROJECT_TRUST_TOML_FILE, codex_home);
 +    let project_trust_config: ProjectTrustConfigToml =
-+        load_config_toml_for_required_layer_raw(fs, &project_trust_file, false)
-+            .await?
-+            .toml
-+            .try_into()
-+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
++        load_config_toml_for_required_layer(fs, &project_trust_file, false, |config| {
++            ConfigLayerEntry::new(ConfigLayerSource::SessionFlags, config)
++        })
++        .await?
++        .config
++        .try_into()
++        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
 +    let filtered_project_trust = TomlValue::try_from(project_trust_config)
 +        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
-+    let project_trust_layer = ConfigLayerEntry::new(
-+        ConfigLayerSource::User {
-+            file: project_trust_file.clone(),
-+            profile: None,
-+        },
-+        filtered_project_trust,
-+    );
++    // This is effective runtime state, not the active user configuration.
++    // Keeping it out of ConfigLayerSource::User ensures ordinary config writes
++    // continue to read and update config.toml rather than this state file.
++    let project_trust_layer =
++        ConfigLayerEntry::new(ConfigLayerSource::SessionFlags, filtered_project_trust);
 +    layers.push(project_trust_layer);
 +
      let mut startup_warnings = None;
      if let Some(cwd) = cwd {
          let mut merged_so_far = TomlValue::Table(toml::map::Map::new());
-@@ -381,7 +405,7 @@ pub async fn load_config_layers_state(
+@@ -317,7 +341,7 @@ pub async fn load_config_layers_state(
              &cwd,
              &project_root_markers,
              codex_home,
@@ -66,7 +79,7 @@ diff --git a/codex-rs/config/src/loader/mod.rs b/codex-rs/config/src/loader/mod.
          )
          .await
          {
-@@ -940,7 +964,7 @@ struct ProjectTrustContext {
+@@ -823,7 +847,7 @@ struct ProjectTrustContext {
      user_config_file: AbsolutePathBuf,
  }
 
@@ -76,6 +89,7 @@ diff --git a/codex-rs/config/src/loader/mod.rs b/codex-rs/config/src/loader/mod.
      projects: Option<std::collections::HashMap<String, ProjectConfig>>,
  }
 diff --git a/codex-rs/config/src/loader/tests.rs b/codex-rs/config/src/loader/tests.rs
+index 068e29a..ca41a49 100644
 --- a/codex-rs/config/src/loader/tests.rs
 +++ b/codex-rs/config/src/loader/tests.rs
 @@ -13,6 +13,60 @@ use tempfile::tempdir;
@@ -140,9 +154,10 @@ diff --git a/codex-rs/config/src/loader/tests.rs b/codex-rs/config/src/loader/te
      fn canonicalize<'a>(
          &'a self,
 diff --git a/codex-rs/core/src/config/config_tests.rs b/codex-rs/core/src/config/config_tests.rs
+index a52838b..6944087 100644
 --- a/codex-rs/core/src/config/config_tests.rs
 +++ b/codex-rs/core/src/config/config_tests.rs
-@@ -9587,6 +9587,25 @@ trust_level = "trusted"
+@@ -9184,6 +9184,25 @@ trust_level = "trusted"
      Ok(())
  }
 
@@ -169,9 +184,10 @@ diff --git a/codex-rs/core/src/config/config_tests.rs b/codex-rs/core/src/config
  fn test_set_project_trusted_converts_inline_to_explicit() -> anyhow::Result<()> {
      let project_dir = Path::new("/some/path");
 diff --git a/codex-rs/core/src/config/mod.rs b/codex-rs/core/src/config/mod.rs
+index 1fe1b80..14ec296 100644
 --- a/codex-rs/core/src/config/mod.rs
 +++ b/codex-rs/core/src/config/mod.rs
-@@ -2294,7 +2294,7 @@ pub(crate) fn set_project_trust_level_inner(
+@@ -2164,7 +2164,7 @@ pub(crate) fn set_project_trust_level_inner(
      Ok(())
  }
 
@@ -180,7 +196,7 @@ diff --git a/codex-rs/core/src/config/mod.rs b/codex-rs/core/src/config/mod.rs
  /// Use with caution.
  pub fn set_project_trust_level(
      codex_home: &Path,
-@@ -2303,7 +2303,7 @@ pub fn set_project_trust_level(
+@@ -2173,7 +2173,7 @@ pub fn set_project_trust_level(
  ) -> anyhow::Result<()> {
      use crate::config::edit::ConfigEditsBuilder;
 
@@ -189,3 +205,221 @@ diff --git a/codex-rs/core/src/config/mod.rs b/codex-rs/core/src/config/mod.rs
          .set_project_trust_level(project_path, trust_level)
          .apply_blocking()
  }
+diff --git a/codex-rs/tui/src/config_update.rs b/codex-rs/tui/src/config_update.rs
+index a71f34b..eaa3dc9 100644
+--- a/codex-rs/tui/src/config_update.rs
++++ b/codex-rs/tui/src/config_update.rs
+@@ -15,16 +15,15 @@ use codex_app_server_protocol::MergeStrategy;
+ use codex_app_server_protocol::RequestId;
+ use codex_app_server_protocol::SkillsConfigWriteParams;
+ use codex_app_server_protocol::SkillsConfigWriteResponse;
+-use codex_config::loader::project_trust_key;
+ use codex_features::FEATURES;
+ use codex_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
+-use codex_protocol::config_types::TrustLevel;
+ use codex_utils_absolute_path::AbsolutePathBuf;
+ use color_eyre::eyre::Result;
+ use color_eyre::eyre::WrapErr;
+ use serde_json::Value as JsonValue;
+ use std::fmt::Display;
+ use std::path::Path;
++use std::path::PathBuf;
+ use uuid::Uuid;
+
+ pub(crate) fn replace_config_value(key_path: impl Into<String>, value: JsonValue) -> ConfigEdit {
+@@ -48,16 +47,6 @@ pub(crate) fn format_config_error(err: &impl Display) -> String {
+     format!("{err:#}")
+ }
+
+-fn trusted_project_edit(project_path: &Path) -> ConfigEdit {
+-    let project_key = project_trust_key(project_path)
+-        .replace('\\', "\\\\")
+-        .replace('"', "\\\"");
+-    replace_config_value(
+-        format!("projects.\"{project_key}\".trust_level"),
+-        serde_json::json!(TrustLevel::Trusted.to_string()),
+-    )
+-}
+-
+ pub(crate) fn build_model_selection_edits(
+     model: &str,
+     effort: Option<impl ToString>,
+@@ -163,11 +152,18 @@ pub(crate) async fn write_config_batch(
+         .wrap_err("config/batchWrite failed in TUI")
+ }
+
+-pub(crate) async fn write_trusted_project(
+-    request_handle: AppServerRequestHandle,
+-    project_path: &Path,
+-) -> Result<ConfigWriteResponse> {
+-    write_config_batch(request_handle, vec![trusted_project_edit(project_path)]).await
++pub(crate) async fn write_trusted_project(codex_home: PathBuf, project_path: &Path) -> Result<()> {
++    let project_path = project_path.to_path_buf();
++    tokio::task::spawn_blocking(move || {
++        codex_core::config::set_project_trust_level(
++            &codex_home,
++            &project_path,
++            codex_protocol::config_types::TrustLevel::Trusted,
++        )
++    })
++    .await
++    .wrap_err("project trust persistence task panicked")?
++    .map_err(|err| color_eyre::eyre::eyre!("failed to persist project trust: {err:#}"))
+ }
+
+ pub(crate) async fn read_effective_config(
+diff --git a/codex-rs/tui/src/config_update_tests.rs b/codex-rs/tui/src/config_update_tests.rs
+index ee75088..0a783ec 100644
+--- a/codex-rs/tui/src/config_update_tests.rs
++++ b/codex-rs/tui/src/config_update_tests.rs
+@@ -1,25 +1,36 @@
+ use super::*;
+ use color_eyre::eyre::WrapErr;
+ use pretty_assertions::assert_eq;
+-use std::path::Path;
+
+-#[test]
+-fn app_scoped_key_path_quotes_dotted_app_ids() {
+-    assert_eq!(
+-        app_scoped_key_path("plugin.linear", "enabled"),
+-        "apps.\"plugin.linear\".enabled"
++#[tokio::test]
++async fn trusted_project_write_uses_dedicated_state_file() {
++    let codex_home = tempfile::tempdir().expect("temp codex home");
++    let project = codex_home.path().join("project");
++
++    write_trusted_project(codex_home.path().to_path_buf(), &project)
++        .await
++        .expect("persist project trust");
++
++    assert!(
++        !codex_home
++            .path()
++            .join(codex_config::CONFIG_TOML_FILE)
++            .exists()
+     );
++    let state = std::fs::read_to_string(
++        codex_home
++            .path()
++            .join(codex_config::PROJECT_TRUST_TOML_FILE),
++    )
++    .expect("read project trust state");
++    assert!(state.contains("trust_level = \"trusted\""));
+ }
+
+ #[test]
+-fn trusted_project_edit_targets_project_trust_level() {
++fn app_scoped_key_path_quotes_dotted_app_ids() {
+     assert_eq!(
+-        trusted_project_edit(Path::new("/workspace/team.project")),
+-        ConfigEdit {
+-            key_path: "projects.\"/workspace/team.project\".trust_level".to_string(),
+-            value: serde_json::json!("trusted"),
+-            merge_strategy: MergeStrategy::Replace,
+-        }
++        app_scoped_key_path("plugin.linear", "enabled"),
++        "apps.\"plugin.linear\".enabled"
+     );
+ }
+
+diff --git a/codex-rs/tui/src/onboarding/onboarding_screen.rs b/codex-rs/tui/src/onboarding/onboarding_screen.rs
+index 405b377..f3d5cd3 100644
+--- a/codex-rs/tui/src/onboarding/onboarding_screen.rs
++++ b/codex-rs/tui/src/onboarding/onboarding_screen.rs
+@@ -47,6 +47,7 @@ use crate::tui::FrameRequester;
+ use crate::tui::Tui;
+ use crate::tui::TuiEvent;
+ use color_eyre::eyre::Result;
++use std::path::PathBuf;
+ use std::sync::Arc;
+ use std::sync::RwLock;
+
+@@ -75,6 +76,7 @@ pub(crate) trait StepStateProvider {
+
+ pub(crate) struct OnboardingScreen {
+     request_frame: FrameRequester,
++    codex_home: PathBuf,
+     steps: Vec<Step>,
+     is_done: bool,
+     should_exit: bool,
+@@ -111,6 +113,7 @@ impl OnboardingScreen {
+             config,
+         } = args;
+         let cwd = config.cwd.to_path_buf();
++        let codex_home = config.codex_home.to_path_buf();
+         let forced_login_method = config.forced_login_method;
+         let mut steps: Vec<Step> = Vec::new();
+         steps.push(Step::Welcome(WelcomeWidget::new(
+@@ -162,6 +165,7 @@ impl OnboardingScreen {
+         }
+         Self {
+             request_frame: tui.frame_requester(),
++            codex_home,
+             steps,
+             is_done: false,
+             should_exit: false,
+@@ -478,7 +482,6 @@ pub(crate) async fn run_onboarding_app(
+ ) -> Result<OnboardingResult> {
+     use tokio_stream::StreamExt;
+
+-    let app_server_request_handle = args.app_server_request_handle.clone();
+     let mut onboarding_screen = OnboardingScreen::new(tui, args).await;
+     let mut directory_trust_persisted = false;
+     // One-time guard to fully clear the screen after ChatGPT login success message is shown
+@@ -499,10 +502,8 @@ pub(crate) async fn run_onboarding_app(
+                         TuiEvent::Key(key_event) => {
+                             onboarding_screen.handle_key_event(key_event);
+                             if !directory_trust_persisted {
+-                                directory_trust_persisted = persist_selected_trust(
+-                                    &mut onboarding_screen,
+-                                    app_server_request_handle.clone(),
+-                                )
++                                directory_trust_persisted =
++                                    persist_selected_trust(&mut onboarding_screen)
+                                 .await;
+                             }
+                         }
+@@ -574,10 +575,7 @@ pub(crate) async fn run_onboarding_app(
+     })
+ }
+
+-async fn persist_selected_trust(
+-    onboarding_screen: &mut OnboardingScreen,
+-    request_handle: Option<AppServerRequestHandle>,
+-) -> bool {
++async fn persist_selected_trust(onboarding_screen: &mut OnboardingScreen) -> bool {
+     let Some((trust_step_index, trust_target)) = onboarding_screen
+         .steps
+         .iter()
+@@ -594,12 +592,7 @@ async fn persist_selected_trust(
+         return false;
+     };
+
+-    let result = match request_handle {
+-        Some(request_handle) => write_trusted_project(request_handle, &trust_target)
+-            .await
+-            .map(|_| ()),
+-        None => Err(color_eyre::eyre::eyre!("app server unavailable")),
+-    };
++    let result = write_trusted_project(onboarding_screen.codex_home.clone(), &trust_target).await;
+
+     match result {
+         Ok(()) => true,
+@@ -690,6 +683,7 @@ mod tests {
+     async fn trust_persistence_failure_keeps_trust_step_in_progress() {
+         let mut onboarding_screen = OnboardingScreen {
+             request_frame: FrameRequester::test_dummy(),
++            codex_home: PathBuf::from("/missing/codex-home"),
+             steps: vec![Step::TrustDirectory(TrustDirectoryWidget {
+                 cwd: PathBuf::from("/workspace/project"),
+                 trust_target: PathBuf::from("/workspace/project"),
+@@ -703,8 +697,7 @@ mod tests {
+             should_exit: false,
+         };
+
+-        let persisted =
+-            persist_selected_trust(&mut onboarding_screen, /*request_handle*/ None).await;
++        let persisted = persist_selected_trust(&mut onboarding_screen).await;
+
+         assert!(!persisted);
+         let Step::TrustDirectory(widget) = &onboarding_screen.steps[0] else {
