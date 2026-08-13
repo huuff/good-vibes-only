@@ -12,7 +12,7 @@ mod sidebar;
 use chrono::{Local, NaiveDate};
 use dioxus::prelude::*;
 
-use crate::store::Data;
+use crate::store::{DEFAULT_STICKING_TARGET, Data};
 use schedule::ScheduleDraft;
 
 /// Tracked through the dioxus asset system (not inlined in index.html) so
@@ -58,6 +58,8 @@ pub struct Overlays {
     pub name_draft: Signal<String>,
     /// Schedule picker state for the add form and the edit mode.
     pub sched_draft: Signal<ScheduleDraft>,
+    /// Editable repetition milestone for the habit-building phase.
+    pub target_draft: Signal<u32>,
     /// Delete confirm armed.
     pub confirm: Signal<bool>,
 }
@@ -74,6 +76,7 @@ impl Overlays {
     pub fn open_add(&mut self) {
         self.name_draft.set(String::new());
         self.sched_draft.set(ScheduleDraft::default());
+        self.target_draft.set(DEFAULT_STICKING_TARGET);
         self.adding.set(true);
         push_history_entry();
     }
@@ -105,6 +108,7 @@ pub fn app() -> Element {
         editing: use_signal(|| false),
         name_draft: use_signal(String::new),
         sched_draft: use_signal(ScheduleDraft::default),
+        target_draft: use_signal(|| DEFAULT_STICKING_TARGET),
         confirm: use_signal(|| false),
     };
 

@@ -15,6 +15,15 @@ use std::collections::BTreeSet;
 const KEY: &str = "habits/v2";
 const V1_KEY: &str = "habits/v1";
 
+/// A practical default milestone, based on the median time to reach 95%
+/// automaticity in Lally et al. (2010). It is a progress goal, not a claim
+/// that every habit becomes automatic after exactly this many repetitions.
+pub const DEFAULT_STICKING_TARGET: u32 = 66;
+
+fn default_sticking_target() -> u32 {
+    DEFAULT_STICKING_TARGET
+}
+
 /// Days before today that can still be edited from the calendar — enough
 /// to backfill a forgotten day or two without making history rewritable
 /// wholesale.
@@ -93,11 +102,26 @@ pub struct Habit {
     /// defaults to daily — which is what every habit effectively was.
     #[serde(default)]
     pub schedule: Schedule,
+    /// User-chosen repetition milestone for the habit-building phase.
+    /// Older v2 records deserialize to the research-informed default.
+    #[serde(default = "default_sticking_target")]
+    pub sticking_target: u32,
     /// The days this habit was done.
     pub days: BTreeSet<NaiveDate>,
 }
 
 impl Habit {
+    pub fn repetitions(&self) -> usize {
+        self.days.len()
+    }
+
+    pub fn sticking_progress(&self) -> f64 {
+        (self.repetitions() as f64 / f64::from(self.sticking_target.max(1))).min(1.0)
+    }
+
+    pub fn sticking_goal_reached(&self) -> bool {
+        self.repetitions() >= self.sticking_target.max(1) as usize
+    }
     pub fn done_on(&self, day: NaiveDate) -> bool {
         self.days.contains(&day)
     }
@@ -277,6 +301,7 @@ impl Data {
                     id: h.id,
                     name: h.name,
                     schedule: Schedule::Daily,
+                    sticking_target: DEFAULT_STICKING_TARGET,
                     days: h
                         .ticks
                         .iter()
@@ -291,7 +316,7 @@ impl Data {
         persist::set(KEY, self);
     }
 
-    pub fn add(&mut self, name: &str, schedule: Schedule) {
+    pub fn add(&mut self, name: &str, schedule: Schedule, sticking_target: u32) {
         let name = name.trim();
         if name.is_empty() {
             return;
@@ -300,6 +325,7 @@ impl Data {
             id: self.next_id,
             name: name.to_string(),
             schedule,
+            sticking_target: sticking_target.max(1),
             days: BTreeSet::new(),
         });
         self.next_id += 1;
@@ -331,6 +357,12 @@ impl Data {
     pub fn set_schedule(&mut self, id: u64, schedule: Schedule) {
         if let Some(habit) = self.habits.iter_mut().find(|h| h.id == id) {
             habit.schedule = schedule;
+        }
+    }
+
+    pub fn set_sticking_target(&mut self, id: u64, target: u32) {
+        if let Some(habit) = self.habits.iter_mut().find(|h| h.id == id) {
+            habit.sticking_target = target.max(1);
         }
     }
 
@@ -417,6 +449,7 @@ mod tests {
             id: 0,
             name: "test".into(),
             schedule: Schedule::Daily,
+            sticking_target: DEFAULT_STICKING_TARGET,
             days: days_back.iter().map(|&b| day(b)).collect(),
         }
     }
@@ -430,6 +463,7 @@ mod tests {
             id: 0,
             name: "test".into(),
             schedule,
+            sticking_target: DEFAULT_STICKING_TARGET,
             days: days.iter().copied().collect(),
         }
     }
@@ -480,7 +514,7 @@ mod tests {
     #[test]
     fn toggle_flips_within_window_only() {
         let mut data = Data::default();
-        data.add("t", Schedule::Daily);
+        data.add("t", Schedule::Daily, DEFAULT_STICKING_TARGET);
         let id = data.habits[0].id;
         let today = Local::now().date_naive();
 
@@ -509,16 +543,43 @@ mod tests {
     #[test]
     fn add_trims_the_name_and_rejects_empty_names() {
         let mut data = Data::default();
-        data.add("  Run  ", Schedule::Daily);
-        data.add("   ", Schedule::Daily);
+        data.add("  Run  ", Schedule::Daily, DEFAULT_STICKING_TARGET);
+        data.add("   ", Schedule::Daily, DEFAULT_STICKING_TARGET);
         assert_eq!(data.habits.len(), 1);
         assert_eq!(data.habits[0].name, "Run");
+        assert_eq!(data.habits[0].sticking_target, DEFAULT_STICKING_TARGET);
+    }
+
+    #[test]
+    fn sticking_progress_counts_repetitions_and_caps_at_the_target() {
+        let mut h = habit(&[0, 1, 2]);
+        h.sticking_target = 6;
+        assert_eq!(h.repetitions(), 3);
+        assert_eq!(h.sticking_progress(), 0.5);
+        assert!(!h.sticking_goal_reached());
+
+        h.sticking_target = 2;
+        assert_eq!(h.sticking_progress(), 1.0);
+        assert!(h.sticking_goal_reached());
+    }
+
+    #[test]
+    fn sticking_target_defaults_for_old_v2_data_and_is_editable() {
+        let json = r#"{"id":4,"name":"Run","schedule":"Daily","days":[]}"#;
+        let h: Habit = serde_json::from_str(json).unwrap();
+        assert_eq!(h.sticking_target, DEFAULT_STICKING_TARGET);
+
+        let mut data = data_with(vec![h]);
+        data.set_sticking_target(0, 90);
+        assert_eq!(data.habits[0].sticking_target, 90);
+        data.set_sticking_target(0, 0);
+        assert_eq!(data.habits[0].sticking_target, 1);
     }
 
     #[test]
     fn rename_trims_and_rejects_empty() {
         let mut data = Data::default();
-        data.add("Stretch", Schedule::Daily);
+        data.add("Stretch", Schedule::Daily, DEFAULT_STICKING_TARGET);
         let id = data.habits[0].id;
 
         data.rename(id, "  Morning stretch  ");
@@ -534,7 +595,7 @@ mod tests {
     #[test]
     fn delete_removes_the_habit() {
         let mut data = Data::default();
-        data.add("Stretch", Schedule::Daily);
+        data.add("Stretch", Schedule::Daily, DEFAULT_STICKING_TARGET);
         let id = data.habits[0].id;
         data.delete(id);
         assert!(data.habits.is_empty());
@@ -844,7 +905,11 @@ mod tests {
     #[test]
     fn add_stores_the_schedule_and_set_schedule_updates_it() {
         let mut data = Data::default();
-        data.add("Run", Schedule::EveryNDays { n: 2 });
+        data.add(
+            "Run",
+            Schedule::EveryNDays { n: 2 },
+            DEFAULT_STICKING_TARGET,
+        );
         let id = data.habits[0].id;
         assert_eq!(data.habits[0].schedule, Schedule::EveryNDays { n: 2 });
         data.set_schedule(id, Schedule::TimesPerWeek { times: 3 });

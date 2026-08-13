@@ -16,6 +16,9 @@ fn row(habit: Habit, mut data: Signal<Data>, mut overlays: Overlays, undue: bool
     let today = Local::now().date_naive();
     let done = habit.done_today();
     let (status, accent) = habit.status_on(today);
+    let repetitions = habit.repetitions();
+    let target = habit.sticking_target.max(1);
+    let progress = habit.sticking_progress() * 100.0;
     let box_class = match (done, undue, habit.schedule) {
         (true, _, _) => "box done",
         (false, true, Schedule::EveryNDays { .. }) => "box ghost",
@@ -60,6 +63,11 @@ fn row(habit: Habit, mut data: Signal<Data>, mut overlays: Overlays, undue: bool
                 },
                 div { class: "name", "{habit.name}" }
                 div { class: if accent { "note accent" } else { "note" }, "{status}" }
+                div {
+                    class: if habit.sticking_goal_reached() { "habit-progress reached" } else { "habit-progress" },
+                    title: "{repetitions} of {target} repetition milestone",
+                    div { style: "width:{progress:.2}%" }
+                }
             }
             div { class: "dots",
                 for (i , (day , done)) in habit.history(14).into_iter().enumerate() {

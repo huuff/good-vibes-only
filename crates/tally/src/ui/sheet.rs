@@ -48,6 +48,7 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
             overlays
                 .sched_draft
                 .set(ScheduleDraft::from_schedule(schedule));
+            overlays.target_draft.set(habit.sticking_target.max(1));
             overlays.editing.set(true);
         }
     };
@@ -60,6 +61,7 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
         data.with_mut(|d| {
             d.rename(id, &(overlays.name_draft)());
             d.set_schedule(id, (overlays.sched_draft)().schedule());
+            d.set_sticking_target(id, (overlays.target_draft)());
             d.save();
         });
         overlays.editing.set(false);
@@ -142,6 +144,7 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                             },
                         }
                         {schedule_picker(overlays.sched_draft)}
+                        {target_picker(overlays.target_draft)}
                         button {
                             class: "btn",
                             disabled: (overlays.name_draft)().trim().is_empty(),
@@ -164,6 +167,22 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                     }
                     div { class: "sheet-stats",
                         "Streak {habit.streak()} · best {habit.best_streak()}"
+                    }
+                    div { class: "sheet-progress",
+                        div { class: "sheet-progress-copy",
+                            span { "BUILDING" }
+                            strong { "{habit.repetitions()} / {habit.sticking_target.max(1)} REPS" }
+                        }
+                        div { class: "habit-progress large",
+                            div { style: "width:{habit.sticking_progress() * 100.0:.2}%" }
+                        }
+                        p {
+                            if habit.sticking_goal_reached() {
+                                "Milestone reached. Keep repeating it in the same context to reinforce automaticity."
+                            } else {
+                                "66 is a research-informed default, not a guarantee. Automaticity varies by person and behavior."
+                            }
+                        }
                     }
                 }
                 div { class: "cal-nav",
@@ -227,7 +246,11 @@ pub fn add_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
             return;
         }
         data.with_mut(|d| {
-            d.add(&name, (overlays.sched_draft)().schedule());
+            d.add(
+                &name,
+                (overlays.sched_draft)().schedule(),
+                (overlays.target_draft)(),
+            );
             d.save();
         });
         overlays.dismiss();
@@ -270,12 +293,40 @@ pub fn add_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                         },
                     }
                     {schedule_picker(overlays.sched_draft)}
+                    {target_picker(overlays.target_draft)}
                     button {
                         class: "btn",
                         disabled: (overlays.name_draft)().trim().is_empty(),
                         onclick: move |_| add(),
                         "CREATE HABIT"
                     }
+                }
+            }
+        }
+    }
+}
+
+fn target_picker(mut target: Signal<u32>) -> Element {
+    rsx! {
+        div { class: "target-picker",
+            div { class: "target-copy",
+                span { class: "how-label", "STICKING MILESTONE" }
+                span { class: "target-hint", "Completed repetitions · editable · 66 suggested" }
+            }
+            div { class: "num-step target-step",
+                button {
+                    type: "button",
+                    aria_label: "Decrease repetition milestone",
+                    disabled: target() <= 1,
+                    onclick: move |_| target.with_mut(|n| *n = n.saturating_sub(1).max(1)),
+                    "−"
+                }
+                span { class: "num-val", "{target}" }
+                button {
+                    type: "button",
+                    aria_label: "Increase repetition milestone",
+                    onclick: move |_| target.with_mut(|n| *n = n.saturating_add(1).min(999)),
+                    "+"
                 }
             }
         }

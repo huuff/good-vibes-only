@@ -5,7 +5,11 @@ and their done-days live in the browser's localStorage, so the app works
 offline — no server, no account, no sync.
 
 The Today screen is a ledger: one strong list, a checkbox per habit, the
-current streak as a numeral. On a phone it's a single column with a bottom
+current streak as a numeral, and a thin black bar tracking completed
+repetitions toward an editable habit-building milestone. New habits default
+to 66 repetitions: a research-informed prompt based on the median time to
+near-plateau automaticity in Lally et al. (2010), not a promise that a habit
+has scientifically “stuck.” On a phone it's a single column with a bottom
 tab bar; from 900px up it grows a rail nav, a 14-day dot strip per habit,
 and a summary sidebar (completion, the week's bars, best streak). Design:
 "TALLY", Modernist system — Archivo, red on light ground, zero radius —

@@ -363,6 +363,23 @@ button:disabled {
   font-weight: 600;
 }
 
+.habit-progress {
+  height: 4px;
+  margin-top: 9px;
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  overflow: hidden;
+}
+
+.habit-progress > div {
+  height: 100%;
+  background: var(--text);
+}
+
+.habit-progress.reached > div {
+  background: var(--accent);
+}
+
 .dots {
   width: 238px;
   flex: none;
@@ -594,6 +611,40 @@ button:disabled {
   margin-top: 8px;
 }
 
+.sheet-progress {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--divider);
+  background: var(--surface);
+}
+
+.sheet-progress-copy {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.sheet-progress-copy strong {
+  color: var(--text);
+}
+
+.habit-progress.large {
+  height: 7px;
+  margin-top: 10px;
+  background: var(--bg);
+}
+
+.sheet-progress p {
+  margin-top: 9px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 .form {
   display: flex;
   flex-direction: column;
@@ -770,6 +821,42 @@ button:disabled {
   font-size: 12px;
   line-height: 1.5;
   color: var(--muted);
+}
+
+.target-picker {
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 2px solid var(--divider);
+}
+
+.target-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.target-copy .how-label {
+  margin-top: 0;
+}
+
+.target-hint {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.target-step {
+  flex: none;
+  margin: 0;
+}
+
+.target-step .num-val {
+  min-width: 42px;
 }
 
 /* --- sheet calendar ---------------------------------------------------- */
