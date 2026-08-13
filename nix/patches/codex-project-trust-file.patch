@@ -347,7 +347,7 @@ index 405b377..f3d5cd3 100644
          } = args;
          let cwd = config.cwd.to_path_buf();
 +        let codex_home = config.codex_home.to_path_buf();
-         let forced_login_method = config.forced_login_method;
+         let auth_config = config.auth_config();
          let mut steps: Vec<Step> = Vec::new();
          steps.push(Step::Welcome(WelcomeWidget::new(
 @@ -162,6 +165,7 @@ impl OnboardingScreen {
