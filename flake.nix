@@ -4,9 +4,18 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+    codex = {
+      url = "github:openai/codex";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
     };
   };
 
@@ -16,6 +25,7 @@
       nixpkgs,
       crane,
       home-manager,
+      codex,
     }:
     let
       inherit (nixpkgs) lib;
@@ -35,7 +45,16 @@
           fileName: _: lib.nameValuePair (lib.removeSuffix ".nix" fileName) (dir + "/${fileName}")
         ) (lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".nix" n) (builtins.readDir dir));
 
-      extraPackages = pkgs: lib.mapAttrs (_: f: pkgs.callPackage f { }) (nixFilesIn ./nix/packages);
+      extraPackages =
+        pkgs:
+        lib.mapAttrs (
+          name: f:
+          pkgs.callPackage f (
+            lib.optionalAttrs (name == "codex-trust-state") {
+              codexUpstream = codex.packages.${pkgs.stdenv.hostPlatform.system}.codex-rs;
+            }
+          )
+        ) (nixFilesIn ./nix/packages);
 
       # One package per workspace crate, built with `cargo build -p <crate>`.
       crates = lib.attrNames (lib.filterAttrs (_: t: t == "directory") (builtins.readDir ./crates));
