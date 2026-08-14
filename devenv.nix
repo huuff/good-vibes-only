@@ -56,6 +56,11 @@
     '';
   };
 
+  # OpenDesign is imported as a self-contained upstream fork with its own
+  # TypeScript/Nix/shell checks and binary design assets. Do not run this Rust
+  # workspace's file-oriented hooks over that vendored tree.
+  git-hooks.excludes = [ "^opendesign/" ];
+
   git-hooks.hooks = {
     # --- secrets: never commit credentials ---
     ripsecrets.enable = true; # scans staged changes for API keys/tokens
@@ -73,7 +78,13 @@
 
     # --- static analysis: nix ---
     nixfmt.enable = true; # RFC 166 style; nixfmt >= 1.0 (nixfmt-rfc-style is the deprecated alias)
-    statix.enable = true;
+    statix = {
+      enable = true;
+      args = [
+        "--ignore"
+        "opendesign/**"
+      ];
+    };
     deadnix.enable = true;
 
     # --- static analysis: rust ---
