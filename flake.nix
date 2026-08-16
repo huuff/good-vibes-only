@@ -17,6 +17,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.rust-overlay.follows = "rust-overlay";
     };
+    opendesign = {
+      url = "path:./opendesign";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.home-manager.follows = "home-manager";
+    };
   };
 
   outputs =
@@ -26,6 +31,7 @@
       crane,
       home-manager,
       codex,
+      opendesign,
       ...
     }:
     let
@@ -97,17 +103,29 @@
         );
     in
     {
-      packages = forAllSystems (pkgs: cratePackages pkgs // extraPackages pkgs);
+      packages = forAllSystems (
+        pkgs:
+        cratePackages pkgs
+        // extraPackages pkgs
+        // {
+          opendesign = opendesign.packages.${pkgs.stdenv.hostPlatform.system}.daemon;
+        }
+      );
 
       overlays.default = final: _prev: cratePackages final // extraPackages final;
 
       # Every nix/home-manager/<name>.nix is exported as
       # homeManagerModules.<name>.
-      homeManagerModules = nixFilesIn ./nix/home-manager;
+      homeManagerModules = nixFilesIn ./nix/home-manager // {
+        open-design = opendesign.homeManagerModules.open-design;
+      };
 
       homeModules = self.homeManagerModules;
 
-      nixosModules.home-media-system = ./nix/nixos/home-media-system.nix;
+      nixosModules = {
+        home-media-system = ./nix/nixos/home-media-system.nix;
+        open-design = opendesign.nixosModules.open-design;
+      };
 
       nixosConfigurations.home-media-system-vm = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
