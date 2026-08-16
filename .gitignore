@@ -10,9 +10,9 @@
 # direnv
 .direnv/
 
-# nix build outputs
-result
-result-*
+# nix build outputs (anchored: forks/ has source files named result-*)
+/result
+/result-*
 
 # stateful disks created by `nix run .#home-media-system-vm`
 /*.qcow

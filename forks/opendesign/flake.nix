@@ -21,11 +21,14 @@
     dream2nix,
     home-manager,
   }: let
+    # Filter against ./. rather than self: when this flake is consumed as a
+    # relative path input, self points at the consuming repo's source root,
+    # which makes every rel path miss and yields an empty source tree.
     filterProjectSource = includePaths:
       nixpkgs.lib.cleanSourceWith {
-        src = self;
+        src = ./.;
         filter = path: type: let
-          root = toString self;
+          root = toString ./.;
           pathStr = toString path;
           rel = nixpkgs.lib.removePrefix (root + "/") pathStr;
           matches = includePath:
