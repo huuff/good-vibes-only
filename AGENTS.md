@@ -5,6 +5,10 @@ plus reusable Nix modules under `nix/`.
 
 - Put Git worktrees under `.wt/<name>/`; `.wt/` already exists and ignores its
   contents.
+- `forks/` holds local-only forks of upstream projects (e.g.
+  `forks/opendesign`, a fork of nexu-io/open-design with its own subflake,
+  re-exported from the root flake). Not workspace crates; each has its own
+  AGENTS.md — read it before working there. Pre-commit hooks skip `forks/`.
 
 - Each project is a workspace member under `crates/`. Start a new one with
   `cargo new crates/<name>` — the root `Cargo.toml` picks it up via glob.

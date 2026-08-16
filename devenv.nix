@@ -56,10 +56,10 @@
     '';
   };
 
-  # OpenDesign is imported as a self-contained upstream fork with its own
-  # TypeScript/Nix/shell checks and binary design assets. Do not run this Rust
-  # workspace's file-oriented hooks over that vendored tree.
-  git-hooks.excludes = [ "^opendesign/" ];
+  # forks/ holds self-contained upstream forks (e.g. OpenDesign) with their
+  # own TypeScript/Nix/shell checks and binary design assets. Do not run this
+  # Rust workspace's file-oriented hooks over those vendored trees.
+  git-hooks.excludes = [ "^forks/" ];
 
   git-hooks.hooks = {
     # --- secrets: never commit credentials ---
@@ -82,7 +82,7 @@
       enable = true;
       args = [
         "--ignore"
-        "opendesign/**"
+        "forks/**"
       ];
     };
     deadnix.enable = true;

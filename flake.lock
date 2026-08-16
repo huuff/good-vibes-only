@@ -144,11 +144,11 @@
         ]
       },
       "locked": {
-        "path": "./opendesign",
+        "path": "./forks/opendesign",
         "type": "path"
       },
       "original": {
-        "path": "./opendesign",
+        "path": "./forks/opendesign",
         "type": "path"
       },
       "parent": []

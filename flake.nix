@@ -18,7 +18,7 @@
       inputs.rust-overlay.follows = "rust-overlay";
     };
     opendesign = {
-      url = "path:./opendesign";
+      url = "path:./forks/opendesign";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.home-manager.follows = "home-manager";
     };
