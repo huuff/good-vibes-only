@@ -258,31 +258,6 @@
               }
             ];
           }).activationPackage;
-
-        hm-skills =
-          (home-manager.lib.homeManagerConfiguration {
-            inherit pkgs;
-            modules = [
-              self.homeManagerModules.skills
-              {
-                home = {
-                  username = "vibes";
-                  homeDirectory = "/home/vibes";
-                  stateVersion = "25.11";
-                };
-                programs.agent-skills = {
-                  package = self.packages.${pkgs.stdenv.hostPlatform.system}.skills;
-                  claude-code.enable = true;
-                  codex = {
-                    enable = true;
-                    directory = ".config/codex-test/skills";
-                  };
-                  opencode.enable = true;
-                };
-              }
-            ];
-          }).activationPackage;
-
       });
     };
 }
