@@ -78,13 +78,8 @@ impl ScheduleDraft {
 
     fn hint(self, week_start: WeekStart) -> String {
         let week_end = match week_start {
-            WeekStart::Monday => WeekStart::Sunday,
-            WeekStart::Tuesday => WeekStart::Monday,
-            WeekStart::Wednesday => WeekStart::Tuesday,
-            WeekStart::Thursday => WeekStart::Wednesday,
-            WeekStart::Friday => WeekStart::Thursday,
-            WeekStart::Saturday => WeekStart::Friday,
-            WeekStart::Sunday => WeekStart::Saturday,
+            WeekStart::Monday => "Sunday",
+            WeekStart::Sunday => "Saturday",
         };
         match self.kind {
             Kind::Daily => "Tick it off every single day.".into(),
@@ -96,7 +91,7 @@ impl ScheduleDraft {
                 format!(
                     "One check-in any day between {} and {} keeps the week.",
                     week_start.label(),
-                    week_end.label()
+                    week_end
                 )
             }
             Kind::PerWeek => format!(
@@ -104,7 +99,7 @@ impl ScheduleDraft {
                  going as long as each week hits its target.",
                 self.per_week,
                 week_start.label(),
-                week_end.label()
+                week_end
             ),
             Kind::InDays if self.times == 1 => {
                 format!("One check-in within any {} consecutive days.", self.window)
