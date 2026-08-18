@@ -31,6 +31,26 @@
   color-scheme: dark;
 }
 
+@media (prefers-color-scheme: dark) {
+  .app.theme-system {
+    --bg: #151414;
+    --surface: #292626;
+    --text: #f3f2f2;
+    --accent: #ff5a3d;
+    --accent-down: #ec3013;
+    --divider: color-mix(in srgb, var(--text) 22%, transparent);
+    --muted: color-mix(in srgb, var(--text) 58%, transparent);
+    --dim: color-mix(in srgb, var(--text) 38%, transparent);
+    color-scheme: dark;
+  }
+
+  .theme-system .rail-new button,
+  .theme-system .bar-new {
+    background: var(--surface);
+    color: var(--accent);
+  }
+}
+
 * {
   margin: 0;
   padding: 0;

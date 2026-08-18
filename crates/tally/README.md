@@ -32,6 +32,10 @@ period never breaks the streak — the same grace the daily streak always
 gave an unticked today. The header count and the week bars count only
 habits due that day.
 
+Appearance follows the operating-system light/dark preference until the
+Dark mode toggle is used. An explicit choice is stored on-device alongside
+the configurable first day of the week.
+
 Storage is schema v2 (`habits/v2`). Data recorded by the v1 app
 (timestamped ticks) is migrated automatically on first load; the old key
 is left in place as a backup. The schedule field is additive: data

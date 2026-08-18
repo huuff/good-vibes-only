@@ -111,6 +111,7 @@ fn push_history_entry() {
 pub fn app() -> Element {
     let data = use_signal(Data::load);
     let preferences = use_signal(Preferences::load);
+    let mut system_dark = use_signal(|| false);
     let page = use_signal(Page::default);
     let overlays = Overlays {
         detail: use_signal(|| None),
@@ -141,17 +142,40 @@ pub fn app() -> Element {
         });
     });
 
+    // Keep the unsaved appearance choice in sync with the OS. CSS handles
+    // first paint; this signal gives the toggle an accurate accessible state
+    // and lets its first click create the opposite explicit override.
+    use_effect(move || {
+        spawn(async move {
+            let mut changes = document::eval(
+                "const media = window.matchMedia('(prefers-color-scheme: dark)');
+                 dioxus.send(media.matches);
+                 media.addEventListener('change', event => dioxus.send(event.matches));
+                 await new Promise(() => {});",
+            );
+            while let Ok(dark) = changes.recv::<bool>().await {
+                system_dark.set(dark);
+            }
+        });
+    });
+
+    let theme_class = match preferences().dark_mode {
+        Some(true) => "app theme-dark",
+        Some(false) => "app theme-light",
+        None => "app theme-system",
+    };
+
     rsx! {
         document::Stylesheet { href: CSS }
         document::Style { {font_faces()} }
-        div { class: if preferences().dark_mode { "app theme-dark" } else { "app" },
+        div { class: theme_class,
             div { class: "shell",
                 {nav::rail(page, overlays)}
                 main { class: "main",
                     if page() == Page::Today {
                         {ledger::ledger(data, overlays, preferences)}
                     } else {
-                        {settings::settings(preferences)}
+                        {settings::settings(preferences, system_dark)}
                     }
                     {nav::bottom_bar(page, overlays)}
                 }
