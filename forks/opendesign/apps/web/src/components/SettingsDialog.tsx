@@ -1541,8 +1541,8 @@ export function SettingsDialog({
     ReadonlySet<string>
   >(() => new Set());
   const previousInitialRef = useRef(initial);
+  // Accent only — the theme is a constant now that the app ships light-only.
   const lastSavedAppearanceRef = useRef({
-    theme: initial.theme,
     accentColor: resolveAccentColor(initial.accentColor),
   });
 
@@ -1558,10 +1558,9 @@ export function SettingsDialog({
 
   useEffect(() => {
     lastSavedAppearanceRef.current = {
-      theme: initial.theme,
       accentColor: resolveAccentColor(initial.accentColor),
     };
-  }, [initial.theme, initial.accentColor]);
+  }, [initial.accentColor]);
 
   useEffect(() => {
     const previousInitial = previousInitialRef.current;
@@ -3308,7 +3307,6 @@ export function SettingsDialog({
             committedClearedByokProviderKeyRef.current = null;
           }
           lastSavedAppearanceRef.current = {
-            theme: persistedSnapshot.theme,
             accentColor: resolveAccentColor(persistedSnapshot.accentColor),
           };
           // If a newer edit landed while the request was in flight,
@@ -3857,8 +3855,10 @@ export function SettingsDialog({
     integrations: { title: t('settings.mcpServerTitle'), subtitle: t('settings.mcpServerHint') },
     mcpClient: { title: t('settings.externalMcpTitle'), subtitle: t('settings.externalMcpHint') },
     language: { title: t('settings.language'), subtitle: t('settings.languageHint') },
-    // Appearance is folded into General, so this entry only keeps the Record
-    // exhaustive for deep links normalized above.
+    // The theme setting is gone (the app ships light-only), so `appearance` has
+    // no copy of its own. It survives only as a legacy deep-link token that
+    // `normalizeSettingsSection` folds into General, so this entry can never be
+    // the active header — it exists to keep the Record exhaustive.
     appearance: { title: t('settings.general'), subtitle: t('settings.generalHint') },
     critiqueTheater: {
       title: t('critiqueTheater.settingsNav'),
@@ -5915,31 +5915,6 @@ export function SettingsDialog({
                     </select>
                     <Icon name="chevron-down" size={14} />
                   </label>
-                </div>
-              </div>
-
-              <div className="settings-general-block">
-                <div className="settings-general-block-head">
-                  <h3>Appearance</h3>
-                  <p className="hint">Choose how Open Design looks on this device.</p>
-                </div>
-                <div className="settings-theme-picker" role="radiogroup" aria-label="Appearance">
-                  {(['light', 'dark', 'system'] as const).map((theme) => (
-                    <button
-                      key={theme}
-                      type="button"
-                      role="radio"
-                      aria-checked={(cfg.theme ?? 'light') === theme}
-                      className={(cfg.theme ?? 'light') === theme ? 'active' : ''}
-                      onClick={() => {
-                        setCfg((current) => ({ ...current, theme }));
-                        applyAppearanceToDocument({ theme, accentColor: cfg.accentColor });
-                      }}
-                    >
-                      <Icon name={theme === 'light' ? 'sun' : theme === 'dark' ? 'moon' : 'sun-moon'} size={16} />
-                      <span>{theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System'}</span>
-                    </button>
-                  ))}
                 </div>
               </div>
 
