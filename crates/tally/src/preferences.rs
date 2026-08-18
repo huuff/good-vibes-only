@@ -2,43 +2,25 @@
 //! and calendar choices can evolve without changing the habit schema.
 
 use chrono::Weekday;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::persist;
 
 const KEY: &str = "settings/v1";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 pub enum WeekStart {
     #[default]
     Monday,
-    Tuesday,
-    Wednesday,
-    Thursday,
-    Friday,
-    Saturday,
     Sunday,
 }
 
 impl WeekStart {
-    pub const ALL: [Self; 7] = [
-        Self::Monday,
-        Self::Tuesday,
-        Self::Wednesday,
-        Self::Thursday,
-        Self::Friday,
-        Self::Saturday,
-        Self::Sunday,
-    ];
+    pub const ALL: [Self; 2] = [Self::Monday, Self::Sunday];
 
     pub const fn label(self) -> &'static str {
         match self {
             Self::Monday => "Monday",
-            Self::Tuesday => "Tuesday",
-            Self::Wednesday => "Wednesday",
-            Self::Thursday => "Thursday",
-            Self::Friday => "Friday",
-            Self::Saturday => "Saturday",
             Self::Sunday => "Sunday",
         }
     }
@@ -46,11 +28,6 @@ impl WeekStart {
     pub const fn value(self) -> &'static str {
         match self {
             Self::Monday => "monday",
-            Self::Tuesday => "tuesday",
-            Self::Wednesday => "wednesday",
-            Self::Thursday => "thursday",
-            Self::Friday => "friday",
-            Self::Saturday => "saturday",
             Self::Sunday => "sunday",
         }
     }
@@ -62,13 +39,24 @@ impl WeekStart {
     pub const fn weekday(self) -> Weekday {
         match self {
             Self::Monday => Weekday::Mon,
-            Self::Tuesday => Weekday::Tue,
-            Self::Wednesday => Weekday::Wed,
-            Self::Thursday => Weekday::Thu,
-            Self::Friday => Weekday::Fri,
-            Self::Saturday => Weekday::Sat,
             Self::Sunday => Weekday::Sun,
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for WeekStart {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let stored = String::deserialize(deserializer)?;
+        Ok(if stored == "Sunday" {
+            Self::Sunday
+        } else {
+            // Older builds offered every weekday. Preserve the conventional
+            // default when reading one of those retired values.
+            Self::Monday
+        })
     }
 }
 
@@ -115,10 +103,21 @@ mod tests {
     }
 
     #[test]
-    fn every_weekday_has_a_stable_form_value() {
+    fn only_monday_and_sunday_are_week_start_choices() {
+        assert_eq!(
+            WeekStart::ALL.as_slice(),
+            &[WeekStart::Monday, WeekStart::Sunday]
+        );
         for day in WeekStart::ALL {
             assert_eq!(WeekStart::from_value(day.value()), Some(day));
         }
-        assert_eq!(WeekStart::from_value("noday"), None);
+        assert_eq!(WeekStart::from_value("thursday"), None);
+    }
+
+    #[test]
+    fn legacy_midweek_start_is_migrated_to_monday() {
+        let settings: Preferences = serde_json::from_str(r#"{"week_start":"Thursday"}"#).unwrap();
+
+        assert_eq!(settings.week_start, WeekStart::Monday);
     }
 }

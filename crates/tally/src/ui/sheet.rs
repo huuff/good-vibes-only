@@ -75,12 +75,10 @@ pub fn detail_sheet(
     };
 
     let week_start = preferences().week_start;
-    let weekday_labels: Vec<&'static str> = (0..7)
-        .map(|offset| {
-            let index = (week_start.weekday().num_days_from_monday() as usize + offset) % 7;
-            &WeekStart::ALL[index].label()[..1]
-        })
-        .collect();
+    let weekday_labels = match week_start {
+        WeekStart::Monday => ["M", "T", "W", "T", "F", "S", "S"],
+        WeekStart::Sunday => ["S", "M", "T", "W", "T", "F", "S"],
+    };
     let day_cells: Vec<Element> = month_cells(shown, week_start)
         .into_iter()
         .map(|cell| {

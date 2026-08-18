@@ -561,7 +561,7 @@ mod tests {
     #[test]
     fn week_boundaries_can_start_on_sunday() {
         assert_eq!(week_start(fri(), WeekStart::Sunday), nd(2026, 7, 26));
-        assert_eq!(week_start(fri(), WeekStart::Wednesday), nd(2026, 7, 29));
+        assert_eq!(week_start(fri(), WeekStart::Monday), nd(2026, 7, 27));
     }
 
     #[test]
@@ -570,9 +570,10 @@ mod tests {
 
         assert!(habit.due_on_with_week_start(fri(), WeekStart::Monday));
         assert!(!habit.due_on_with_week_start(fri(), WeekStart::Sunday));
+        let empty = on(Schedule::TimesPerWeek { times: 1 }, &[]);
         assert_eq!(
-            habit.status_on_with_week_start(fri(), WeekStart::Wednesday),
-            ("0 OF 1 THIS WEEK · DUE BY TUE".into(), true)
+            empty.status_on_with_week_start(fri(), WeekStart::Sunday),
+            ("0 OF 1 THIS WEEK · DUE BY SAT".into(), true)
         );
     }
 
