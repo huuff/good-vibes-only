@@ -4,8 +4,15 @@ use dioxus::prelude::*;
 
 use crate::preferences::{Preferences, WeekStart};
 
-pub fn settings(mut preferences: Signal<Preferences>) -> Element {
+pub fn settings(mut preferences: Signal<Preferences>, system_dark: Signal<bool>) -> Element {
     let current = preferences();
+    let dark = current.dark_mode.unwrap_or(system_dark());
+    let appearance = match current.dark_mode {
+        None if dark => "System · Dark",
+        None => "System · Light",
+        Some(true) => "Dark",
+        Some(false) => "Light",
+    };
     rsx! {
         div { class: "settings-screen",
             div { class: "settings-head",
@@ -16,14 +23,14 @@ pub fn settings(mut preferences: Signal<Preferences>) -> Element {
                 div { class: "setting-row appearance-row",
                     div { class: "setting-copy",
                         strong { "Dark mode" }
-                        span { if current.dark_mode { "Dark" } else { "Light" } }
+                        span { "{appearance}" }
                     }
                     button {
-                        class: if current.dark_mode { "theme-switch on" } else { "theme-switch" },
-                        aria_label: if current.dark_mode { "Dark mode enabled" } else { "Dark mode disabled" },
-                        aria_pressed: current.dark_mode,
+                        class: if dark { "theme-switch on" } else { "theme-switch" },
+                        aria_label: if dark { "Dark mode enabled" } else { "Dark mode disabled" },
+                        aria_pressed: dark,
                         onclick: move |_| preferences.with_mut(|prefs| {
-                            prefs.dark_mode = !prefs.dark_mode;
+                            prefs.dark_mode = Some(!dark);
                             prefs.save();
                         }),
                         span {}

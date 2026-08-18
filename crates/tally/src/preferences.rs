@@ -75,7 +75,10 @@ impl WeekStart {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Preferences {
-    pub dark_mode: bool,
+    /// `None` follows the operating-system preference. Existing stored
+    /// booleans deserialize as explicit overrides.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dark_mode: Option<bool>,
     pub week_start: WeekStart,
 }
 
@@ -99,8 +102,16 @@ mod tests {
         assert_eq!(empty, Preferences::default());
 
         let dark_only: Preferences = serde_json::from_str(r#"{"dark_mode":true}"#).unwrap();
-        assert!(dark_only.dark_mode);
+        assert_eq!(dark_only.dark_mode, Some(true));
         assert_eq!(dark_only.week_start, WeekStart::Monday);
+    }
+
+    #[test]
+    fn settings_without_a_theme_do_not_force_light_mode() {
+        let settings: Preferences = serde_json::from_str("{}").unwrap();
+        let stored = serde_json::to_value(settings).unwrap();
+
+        assert_eq!(stored.get("dark_mode"), None);
     }
 
     #[test]
