@@ -33,12 +33,14 @@ pub fn rail(mut page: Signal<Page>, mut overlays: Overlays) -> Element {
 
 pub fn bottom_bar(mut page: Signal<Page>, mut overlays: Overlays) -> Element {
     rsx! {
-        button {
-            class: "fab-new",
-            aria_label: "Create new habit",
-            title: "Create new habit",
-            onclick: move |_| overlays.open_add(),
-            "+"
+        if page() == Page::Today {
+            button {
+                class: "fab-new",
+                aria_label: "Create new habit",
+                title: "Create new habit",
+                onclick: move |_| overlays.open_add(),
+                "+"
+            }
         }
         div { class: "bar",
             button {
