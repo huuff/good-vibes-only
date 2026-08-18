@@ -44,10 +44,15 @@
     color-scheme: dark;
   }
 
-  .theme-system .rail-new button,
-  .theme-system .bar-new {
+  .theme-system .rail-new button {
     background: var(--surface);
     color: var(--accent);
+  }
+
+  .theme-system .fab-new {
+    background: var(--accent);
+    color: var(--text);
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--bg) 65%, transparent);
   }
 }
 
@@ -104,6 +109,7 @@ button:disabled {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 /* --- desktop rail (hidden on mobile) ------------------------------- */
@@ -164,10 +170,15 @@ button:disabled {
   letter-spacing: 0.12em;
 }
 
-.theme-dark .rail-new button,
-.theme-dark .bar-new {
+.theme-dark .rail-new button {
   background: var(--surface);
   color: var(--accent);
+}
+
+.theme-dark .fab-new {
+  background: var(--accent);
+  color: var(--text);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--bg) 65%, transparent);
 }
 
 .plus-sign {
@@ -204,10 +215,15 @@ button:disabled {
   color: var(--accent);
 }
 
-.bar-new {
+.fab-new {
+  position: absolute;
+  right: 20px;
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  z-index: 2;
   width: 52px;
-  min-height: 52px;
-  flex: none;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
   background: var(--text);
   color: var(--bg);
   display: flex;
@@ -215,6 +231,8 @@ button:disabled {
   justify-content: center;
   font-size: 24px;
   font-weight: 400;
+  line-height: 1;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--text) 24%, transparent);
 }
 
 /* --- Settings ------------------------------------------------------- */
@@ -1122,7 +1140,8 @@ button:disabled {
     display: flex;
   }
 
-  .bar {
+  .bar,
+  .fab-new {
     display: none;
   }
 
