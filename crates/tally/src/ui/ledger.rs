@@ -9,9 +9,40 @@ use dioxus::prelude::*;
 use super::Overlays;
 use crate::store::{Data, Habit, Schedule};
 
-/// One ledger row. `undue` rows render dimmed with either a dashed box
-/// (nothing to do yet) or a filled dark check (period target already
-/// met, just not today).
+#[derive(Debug, PartialEq)]
+struct RowAppearance {
+    row_class: &'static str,
+    box_class: &'static str,
+    show_check: bool,
+}
+
+impl RowAppearance {
+    fn for_day(habit: &Habit, day: chrono::NaiveDate, undue: bool) -> Self {
+        let done = habit.done_on(day);
+        let completed_week = undue && matches!(habit.schedule, Schedule::TimesPerWeek { .. });
+        let box_class = match (done, undue, habit.schedule) {
+            (true, _, _) => "box done",
+            (false, true, Schedule::EveryNDays { .. }) => "box ghost",
+            (false, true, Schedule::TimesPerWeek { .. }) => "box",
+            (false, true, _) => "box period",
+            (false, false, _) => "box",
+        };
+        Self {
+            row_class: if completed_week {
+                "row completed"
+            } else if undue {
+                "row undue"
+            } else {
+                "row"
+            },
+            box_class,
+            show_check: done || box_class == "box period",
+        }
+    }
+}
+
+/// One ledger row. Completed weekly targets follow design 5a: the row
+/// carries the completion treatment while today's checkbox stays empty.
 fn row(habit: Habit, mut data: Signal<Data>, mut overlays: Overlays, undue: bool) -> Element {
     let today = Local::now().date_naive();
     let done = habit.done_today();
@@ -19,20 +50,14 @@ fn row(habit: Habit, mut data: Signal<Data>, mut overlays: Overlays, undue: bool
     let repetitions = habit.repetitions();
     let target = habit.sticking_target.max(1);
     let progress = habit.sticking_progress() * 100.0;
-    let box_class = match (done, undue, habit.schedule) {
-        (true, _, _) => "box done",
-        (false, true, Schedule::EveryNDays { .. }) => "box ghost",
-        (false, true, _) => "box period",
-        (false, false, _) => "box",
-    };
-    let checked = done || box_class == "box period";
+    let appearance = RowAppearance::for_day(&habit, today, undue);
     rsx! {
         div {
             key: "{habit.id}",
-            class: if undue { "row undue" } else { "row" },
+            class: appearance.row_class,
             onclick: move |_| overlays.open_detail(habit.id),
             button {
-                class: box_class,
+                class: appearance.box_class,
                 aria_pressed: done,
                 aria_label: "Mark {habit.name} done today",
                 title: "Done today — tap to toggle",
@@ -43,7 +68,7 @@ fn row(habit: Habit, mut data: Signal<Data>, mut overlays: Overlays, undue: bool
                         d.save();
                     });
                 },
-                if checked {
+                if appearance.show_check {
                     svg {
                         width: "16",
                         height: "16",
@@ -139,11 +164,38 @@ pub fn ledger(data: Signal<Data>, overlays: Overlays) -> Element {
                 {row(habit, data, overlays, false)}
             }
             if !later.is_empty() {
-                div { class: "sec-head", "NOT DUE TODAY" }
+                div { class: "sec-head", "COMPLETED" }
             }
             for habit in later {
                 {row(habit, data, overlays, true)}
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use chrono::NaiveDate;
+
+    use super::*;
+
+    #[test]
+    fn weekly_target_met_uses_completed_row_with_actionable_empty_checkbox() {
+        let today = NaiveDate::from_ymd_opt(2026, 7, 31).unwrap();
+        let habit = Habit {
+            id: 1,
+            name: "Review budget".into(),
+            schedule: Schedule::TimesPerWeek { times: 1 },
+            sticking_target: 30,
+            days: BTreeSet::from([NaiveDate::from_ymd_opt(2026, 7, 29).unwrap()]),
+        };
+
+        let appearance = RowAppearance::for_day(&habit, today, true);
+
+        assert_eq!(appearance.row_class, "row completed");
+        assert_eq!(appearance.box_class, "box");
+        assert!(!appearance.show_check);
     }
 }

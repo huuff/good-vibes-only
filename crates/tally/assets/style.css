@@ -337,6 +337,13 @@ button:disabled {
   opacity: 0.5;
 }
 
+/* Weekly target met: completion belongs to the row, not today's checkbox. */
+.row.completed {
+  min-height: 76px;
+  background: var(--surface);
+  border-right: 3px solid var(--text);
+}
+
 .row-name {
   flex: 1;
   min-width: 0;

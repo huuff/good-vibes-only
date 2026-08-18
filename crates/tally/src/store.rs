@@ -225,9 +225,13 @@ impl Habit {
                 (format!("{}{}", self.schedule.label(), next()), false)
             }
             Schedule::EveryNDays { .. } => (self.schedule.label(), false),
-            Schedule::TimesPerWeek { times } if count >= times => {
-                (format!("{} · DONE THIS WEEK", self.schedule.label()), false)
-            }
+            Schedule::TimesPerWeek { times } if count >= times => (
+                format!(
+                    "{} · {count} OF {times} · TARGET MET",
+                    self.schedule.label()
+                ),
+                false,
+            ),
             Schedule::TimesPerWeek { times } => {
                 (format!("{count} OF {times} THIS WEEK · DUE BY SUN"), true)
             }
@@ -866,7 +870,7 @@ mod tests {
         let h = on(Schedule::TimesPerWeek { times: 1 }, &[nd(2026, 7, 27)]);
         assert_eq!(
             h.status_on(fri()),
-            ("WEEKLY · DONE THIS WEEK".to_string(), false)
+            ("WEEKLY · 1 OF 1 · TARGET MET".to_string(), false)
         );
         let h = on(
             Schedule::TimesPerWeek { times: 2 },
@@ -874,7 +878,7 @@ mod tests {
         );
         assert_eq!(
             h.status_on(fri()),
-            ("2×/WEEK · DONE THIS WEEK".to_string(), false)
+            ("2×/WEEK · 2 OF 2 · TARGET MET".to_string(), false)
         );
 
         // Every N days: plain while due, next date once satisfied.
