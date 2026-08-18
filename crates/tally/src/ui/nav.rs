@@ -33,6 +33,13 @@ pub fn rail(mut page: Signal<Page>, mut overlays: Overlays) -> Element {
 
 pub fn bottom_bar(mut page: Signal<Page>, mut overlays: Overlays) -> Element {
     rsx! {
+        button {
+            class: "fab-new",
+            aria_label: "Create new habit",
+            title: "Create new habit",
+            onclick: move |_| overlays.open_add(),
+            "+"
+        }
         div { class: "bar",
             button {
                 class: if page() == Page::Today { "bar-tab on" } else { "bar-tab" },
@@ -43,14 +50,6 @@ pub fn bottom_bar(mut page: Signal<Page>, mut overlays: Overlays) -> Element {
                 class: if page() == Page::Settings { "bar-tab on" } else { "bar-tab" },
                 onclick: move |_| page.set(Page::Settings),
                 "SETTINGS"
-            }
-            if page() == Page::Today {
-                button {
-                    class: "bar-new",
-                    title: "New habit",
-                    onclick: move |_| overlays.open_add(),
-                    "+"
-                }
             }
         }
     }
