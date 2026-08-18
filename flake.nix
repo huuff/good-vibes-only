@@ -270,18 +270,32 @@
                   homeDirectory = "/home/vibes";
                   stateVersion = "25.11";
                 };
-                programs.herdr = {
-                  enable = true;
-                  package = pkgs.hello;
-                  settings = {
-                    onboarding = false;
-                    session.resume_agents_on_restore = true;
-                    terminal.default_shell = "nu";
+                programs = {
+                  herdr = {
+                    enable = true;
+                    package = pkgs.herdr;
+                    settings = {
+                      onboarding = false;
+                      session.resume_agents_on_restore = true;
+                      terminal.default_shell = "nu";
+                    };
+                    integrations = {
+                      claude.enable = true;
+                      codex.enable = true;
+                      opencode.enable = true;
+                    };
                   };
-                  integrations = {
-                    claude.enable = true;
-                    codex.enable = true;
-                    opencode.enable = true;
+                  claude-code = {
+                    enable = true;
+                    package = null;
+                  };
+                  codex = {
+                    enable = true;
+                    package = null;
+                  };
+                  opencode = {
+                    enable = true;
+                    package = null;
                   };
                 };
               }
