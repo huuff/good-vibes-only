@@ -1,4 +1,5 @@
 mod persist;
+mod preferences;
 mod store;
 mod ui;
 

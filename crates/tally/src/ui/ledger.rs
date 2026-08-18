@@ -7,6 +7,7 @@ use chrono::Local;
 use dioxus::prelude::*;
 
 use super::Overlays;
+use crate::preferences::{Preferences, WeekStart};
 use crate::store::{Data, Habit, Schedule};
 
 #[derive(Debug, PartialEq)]
@@ -43,10 +44,16 @@ impl RowAppearance {
 
 /// One ledger row. Completed weekly targets follow design 5a: the row
 /// carries the completion treatment while today's checkbox stays empty.
-fn row(habit: Habit, mut data: Signal<Data>, mut overlays: Overlays, undue: bool) -> Element {
+fn row(
+    habit: Habit,
+    mut data: Signal<Data>,
+    mut overlays: Overlays,
+    undue: bool,
+    week_start: WeekStart,
+) -> Element {
     let today = Local::now().date_naive();
     let done = habit.done_today();
-    let (status, accent) = habit.status_on(today);
+    let (status, accent) = habit.status_on_with_week_start(today, week_start);
     let repetitions = habit.repetitions();
     let target = habit.sticking_target.max(1);
     let progress = habit.sticking_progress() * 100.0;
@@ -109,14 +116,15 @@ fn row(habit: Habit, mut data: Signal<Data>, mut overlays: Overlays, undue: bool
             }
             span {
                 class: if done || undue { "streak-n" } else { "streak-n dim" },
-                "{habit.streak()}"
+                "{habit.streak_on_with_week_start(today, week_start)}"
             }
         }
     }
 }
 
-pub fn ledger(data: Signal<Data>, overlays: Overlays) -> Element {
-    let summary = data().summary();
+pub fn ledger(data: Signal<Data>, overlays: Overlays, preferences: Signal<Preferences>) -> Element {
+    let week_start = preferences().week_start;
+    let summary = data().summary_with_week_start(week_start);
     let today = Local::now().date_naive();
     let date = Local::now().format("%a %-d %b %Y").to_string();
     let pct = if summary.total == 0 {
@@ -124,8 +132,10 @@ pub fn ledger(data: Signal<Data>, overlays: Overlays) -> Element {
     } else {
         summary.done as f64 * 100.0 / summary.total as f64
     };
-    let (due, later): (Vec<Habit>, Vec<Habit>) =
-        data().habits.into_iter().partition(|h| h.due_on(today));
+    let (due, later): (Vec<Habit>, Vec<Habit>) = data()
+        .habits
+        .into_iter()
+        .partition(|h| h.due_on_with_week_start(today, week_start));
     rsx! {
         div { class: "head",
             div { class: "head-row",
@@ -161,13 +171,13 @@ pub fn ledger(data: Signal<Data>, overlays: Overlays) -> Element {
                 div { class: "sec-head", "DUE TODAY" }
             }
             for habit in due {
-                {row(habit, data, overlays, false)}
+                {row(habit, data, overlays, false, week_start)}
             }
             if !later.is_empty() {
                 div { class: "sec-head", "COMPLETED" }
             }
             for habit in later {
-                {row(habit, data, overlays, true)}
+                {row(habit, data, overlays, true, week_start)}
             }
         }
     }

@@ -7,13 +7,16 @@ use dioxus::prelude::*;
 
 use super::Overlays;
 use super::schedule::{ScheduleDraft, schedule_picker};
+use crate::preferences::{Preferences, WeekStart};
 use crate::store::{Data, editable};
 
-/// The days of the month containing `month`, Monday-first, with leading
-/// `None`s so indices line up with a 7-column grid.
-fn month_cells(month: NaiveDate) -> Vec<Option<NaiveDate>> {
+/// The days of the month containing `month`, padded for the configured
+/// first weekday so indices line up with a 7-column grid.
+fn month_cells(month: NaiveDate, week_start: WeekStart) -> Vec<Option<NaiveDate>> {
     let first = month.with_day(1).expect("every month has a day 1");
-    let mut cells = vec![None; first.weekday().num_days_from_monday() as usize];
+    let first_index = first.weekday().num_days_from_monday();
+    let week_index = week_start.weekday().num_days_from_monday();
+    let mut cells = vec![None; ((first_index + 7 - week_index) % 7) as usize];
     let mut day = first;
     while day.month() == first.month() {
         cells.push(Some(day));
@@ -25,7 +28,11 @@ fn month_cells(month: NaiveDate) -> Vec<Option<NaiveDate>> {
     cells
 }
 
-pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
+pub fn detail_sheet(
+    mut data: Signal<Data>,
+    mut overlays: Overlays,
+    preferences: Signal<Preferences>,
+) -> Element {
     let Some(id) = (overlays.detail)() else {
         return rsx! {};
     };
@@ -67,7 +74,14 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
         overlays.editing.set(false);
     };
 
-    let day_cells: Vec<Element> = month_cells(shown)
+    let week_start = preferences().week_start;
+    let weekday_labels: Vec<&'static str> = (0..7)
+        .map(|offset| {
+            let index = (week_start.weekday().num_days_from_monday() as usize + offset) % 7;
+            &WeekStart::ALL[index].label()[..1]
+        })
+        .collect();
+    let day_cells: Vec<Element> = month_cells(shown, week_start)
         .into_iter()
         .map(|cell| {
             let Some(day) = cell else {
@@ -143,7 +157,7 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                                 }
                             },
                         }
-                        {schedule_picker(overlays.sched_draft)}
+                        {schedule_picker(overlays.sched_draft, week_start)}
                         {target_picker(overlays.target_draft)}
                         button {
                             class: "btn",
@@ -166,7 +180,7 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                         "{habit.schedule.label()} ✎"
                     }
                     div { class: "sheet-stats",
-                        "Streak {habit.streak()} · best {habit.best_streak()}"
+                        "Streak {habit.streak_on_with_week_start(today, week_start)} · best {habit.best_streak_with_week_start(week_start)}"
                     }
                     div { class: "sheet-progress",
                         div { class: "sheet-progress-copy",
@@ -202,7 +216,7 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                     }
                 }
                 div { class: "cal-grid",
-                    for wd in ["M", "T", "W", "T", "F", "S", "S"] {
+                    for wd in weekday_labels {
                         span { class: "cal-wd", "{wd}" }
                     }
                     {day_cells.into_iter()}
@@ -235,7 +249,11 @@ pub fn detail_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
     }
 }
 
-pub fn add_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
+pub fn add_sheet(
+    mut data: Signal<Data>,
+    mut overlays: Overlays,
+    preferences: Signal<Preferences>,
+) -> Element {
     if !(overlays.adding)() {
         return rsx! {};
     }
@@ -292,7 +310,7 @@ pub fn add_sheet(mut data: Signal<Data>, mut overlays: Overlays) -> Element {
                             }
                         },
                     }
-                    {schedule_picker(overlays.sched_draft)}
+                    {schedule_picker(overlays.sched_draft, preferences().week_start)}
                     {target_picker(overlays.target_draft)}
                     button {
                         class: "btn",
@@ -340,10 +358,21 @@ mod tests {
     #[test]
     fn month_cells_pad_to_weekday_columns() {
         // July 2026 starts on a Wednesday: two leading blanks, then 31 days.
-        let cells = month_cells(NaiveDate::from_ymd_opt(2026, 7, 15).unwrap());
+        let cells = month_cells(
+            NaiveDate::from_ymd_opt(2026, 7, 15).unwrap(),
+            WeekStart::Monday,
+        );
         assert_eq!(cells.len(), 2 + 31);
         assert!(cells[..2].iter().all(Option::is_none));
         assert_eq!(cells[2], NaiveDate::from_ymd_opt(2026, 7, 1));
         assert_eq!(cells[32], NaiveDate::from_ymd_opt(2026, 7, 31));
+
+        // Sunday-first moves Wednesday to column three.
+        let sunday = month_cells(
+            NaiveDate::from_ymd_opt(2026, 7, 15).unwrap(),
+            WeekStart::Sunday,
+        );
+        assert_eq!(sunday[..3], [None, None, None]);
+        assert_eq!(sunday[3], NaiveDate::from_ymd_opt(2026, 7, 1));
     }
 }

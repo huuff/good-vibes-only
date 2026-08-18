@@ -6,12 +6,14 @@
 mod ledger;
 mod nav;
 mod schedule;
+mod settings;
 mod sheet;
 mod sidebar;
 
 use chrono::{Local, NaiveDate};
 use dioxus::prelude::*;
 
+use crate::preferences::Preferences;
 use crate::store::{DEFAULT_STICKING_TARGET, Data};
 use schedule::ScheduleDraft;
 
@@ -64,6 +66,13 @@ pub struct Overlays {
     pub confirm: Signal<bool>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Page {
+    #[default]
+    Today,
+    Settings,
+}
+
 impl Overlays {
     pub fn open_detail(&mut self, id: u64) {
         self.month.set(Local::now().date_naive());
@@ -101,6 +110,8 @@ fn push_history_entry() {
 
 pub fn app() -> Element {
     let data = use_signal(Data::load);
+    let preferences = use_signal(Preferences::load);
+    let page = use_signal(Page::default);
     let overlays = Overlays {
         detail: use_signal(|| None),
         adding: use_signal(|| false),
@@ -133,15 +144,23 @@ pub fn app() -> Element {
     rsx! {
         document::Stylesheet { href: CSS }
         document::Style { {font_faces()} }
-        div { class: "shell",
-            {nav::rail(overlays)}
-            main { class: "main",
-                {ledger::ledger(data, overlays)}
-                {nav::bottom_bar(overlays)}
+        div { class: if preferences().dark_mode { "app theme-dark" } else { "app" },
+            div { class: "shell",
+                {nav::rail(page, overlays)}
+                main { class: "main",
+                    if page() == Page::Today {
+                        {ledger::ledger(data, overlays, preferences)}
+                    } else {
+                        {settings::settings(preferences)}
+                    }
+                    {nav::bottom_bar(page, overlays)}
+                }
+                if page() == Page::Today {
+                    {sidebar::sidebar(data, preferences)}
+                }
             }
-            {sidebar::sidebar(data)}
+            {sheet::detail_sheet(data, overlays, preferences)}
+            {sheet::add_sheet(data, overlays, preferences)}
         }
-        {sheet::detail_sheet(data, overlays)}
-        {sheet::add_sheet(data, overlays)}
     }
 }

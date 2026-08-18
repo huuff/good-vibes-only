@@ -1,28 +1,26 @@
-//! Navigation chrome: the desktop rail and the mobile bottom bar. Only
-//! TODAY is live — HABITS / STATS / SETTINGS exist in the design but have
-//! no screens yet, so they render muted and inert.
+//! Navigation chrome: the desktop rail and mobile bottom bar.
 
 use dioxus::prelude::*;
 
-use super::Overlays;
+use super::{Overlays, Page};
 
-const TABS: [&str; 3] = ["TODAY", "HABITS", "STATS"];
-
-pub fn rail(mut overlays: Overlays) -> Element {
+pub fn rail(mut page: Signal<Page>, mut overlays: Overlays) -> Element {
     rsx! {
         div { class: "rail",
             div { class: "brand",
                 "TALLY"
                 span { class: "brand-dot", "." }
             }
-            for tab in TABS {
-                span {
-                    class: if tab == "TODAY" { "rail-tab on" } else { "rail-tab" },
-                    aria_disabled: tab != "TODAY",
-                    "{tab}"
-                }
+            button {
+                class: if page() == Page::Today { "rail-tab on" } else { "rail-tab" },
+                onclick: move |_| page.set(Page::Today),
+                "TODAY"
             }
-            span { class: "rail-tab", aria_disabled: true, "SETTINGS" }
+            button {
+                class: if page() == Page::Settings { "rail-tab on" } else { "rail-tab" },
+                onclick: move |_| page.set(Page::Settings),
+                "SETTINGS"
+            }
             div { class: "rail-new",
                 button { onclick: move |_| overlays.open_add(),
                     span { class: "plus-sign", "+" }
@@ -33,21 +31,26 @@ pub fn rail(mut overlays: Overlays) -> Element {
     }
 }
 
-pub fn bottom_bar(mut overlays: Overlays) -> Element {
+pub fn bottom_bar(mut page: Signal<Page>, mut overlays: Overlays) -> Element {
     rsx! {
         div { class: "bar",
-            for tab in TABS {
-                span {
-                    class: if tab == "TODAY" { "bar-tab on" } else { "bar-tab" },
-                    aria_disabled: tab != "TODAY",
-                    "{tab}"
-                }
+            button {
+                class: if page() == Page::Today { "bar-tab on" } else { "bar-tab" },
+                onclick: move |_| page.set(Page::Today),
+                "TODAY"
             }
             button {
-                class: "bar-new",
-                title: "New habit",
-                onclick: move |_| overlays.open_add(),
-                "+"
+                class: if page() == Page::Settings { "bar-tab on" } else { "bar-tab" },
+                onclick: move |_| page.set(Page::Settings),
+                "SETTINGS"
+            }
+            if page() == Page::Today {
+                button {
+                    class: "bar-new",
+                    title: "New habit",
+                    onclick: move |_| overlays.open_add(),
+                    "+"
+                }
             }
         }
     }

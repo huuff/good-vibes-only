@@ -8,6 +8,7 @@
 //! now ignored (and dropped on the next save).
 
 use crate::persist;
+use crate::preferences::WeekStart;
 use chrono::{Datelike, Days, Local, NaiveDate};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -62,14 +63,14 @@ pub(crate) mod v1 {
 
 /// How often a habit is meant to happen (Loop Habit Tracker's model).
 /// Every schedule is "hit a target within a period": a day, a rolling
-/// N-day window, or the calendar week (Monday–Sunday).
+/// N-day window, or a configurable calendar week.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum Schedule {
     #[default]
     Daily,
     /// One check-in per rolling `n`-day window.
     EveryNDays { n: u32 },
-    /// `times` check-ins per calendar week, Monday through Sunday.
+    /// `times` check-ins per configured calendar week.
     TimesPerWeek { times: u32 },
     /// `times` check-ins in any rolling `days`-day window.
     TimesInDays { times: u32, days: u32 },
@@ -89,9 +90,11 @@ impl Schedule {
     }
 }
 
-/// The Monday of the week containing `day`.
-fn week_start(day: NaiveDate) -> NaiveDate {
-    day - Days::new(day.weekday().num_days_from_monday() as u64)
+/// The configured first day of the week containing `day`.
+fn week_start(day: NaiveDate, first: WeekStart) -> NaiveDate {
+    let day_index = day.weekday().num_days_from_monday();
+    let first_index = first.weekday().num_days_from_monday();
+    day - Days::new(((day_index + 7 - first_index) % 7) as u64)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -137,14 +140,14 @@ impl Habit {
 
     /// The first day of the schedule period that ends on `end`: `end`
     /// itself for daily, `end - (len - 1)` for the rolling windows, the
-    /// Monday of `end`'s week for per-week.
-    fn period_start(&self, end: NaiveDate) -> Option<NaiveDate> {
+    /// Configured first day of `end`'s week for per-week.
+    fn period_start(&self, end: NaiveDate, week_first: WeekStart) -> Option<NaiveDate> {
         let back = |len: u32| end.checked_sub_days(Days::new(u64::from(len.max(1)) - 1));
         match self.schedule {
             Schedule::Daily => Some(end),
             Schedule::EveryNDays { n } => back(n),
             Schedule::TimesInDays { days, .. } => back(days),
-            Schedule::TimesPerWeek { .. } => Some(week_start(end)),
+            Schedule::TimesPerWeek { .. } => Some(week_start(end, week_first)),
         }
     }
 
@@ -158,26 +161,45 @@ impl Habit {
 
     /// Whether the period containing `day` already has its target met,
     /// counting check-ins up to and including `day`.
+    #[cfg(test)]
     pub fn satisfied_on(&self, day: NaiveDate) -> bool {
-        self.period_start(day)
+        self.satisfied_on_with_week_start(day, WeekStart::Monday)
+    }
+
+    pub fn satisfied_on_with_week_start(&self, day: NaiveDate, week_first: WeekStart) -> bool {
+        self.period_start(day, week_first)
             .is_some_and(|start| self.count_between(start, day) >= self.target())
     }
 
     /// Whether the habit belongs in the DUE list on `day`: its period
     /// target isn't met yet, or it was checked off that very day (a
     /// just-done habit stays in the due list, checked).
+    #[cfg(test)]
     pub fn due_on(&self, day: NaiveDate) -> bool {
-        self.done_on(day) || !self.satisfied_on(day)
+        self.due_on_with_week_start(day, WeekStart::Monday)
+    }
+
+    pub fn due_on_with_week_start(&self, day: NaiveDate, week_first: WeekStart) -> bool {
+        self.done_on(day) || !self.satisfied_on_with_week_start(day, week_first)
     }
 
     /// The first day after `day` on which the habit becomes due again,
     /// assuming no further check-ins. Every schedule runs out within its
     /// own window length, so the search is short; None only if the search
     /// runs off the calendar.
+    #[cfg(test)]
     pub fn next_due(&self, day: NaiveDate) -> Option<NaiveDate> {
+        self.next_due_with_week_start(day, WeekStart::Monday)
+    }
+
+    pub fn next_due_with_week_start(
+        &self,
+        day: NaiveDate,
+        week_first: WeekStart,
+    ) -> Option<NaiveDate> {
         (1..=366)
             .filter_map(|ahead| day.checked_add_days(Days::new(ahead)))
-            .find(|&d| !self.satisfied_on(d))
+            .find(|&d| !self.satisfied_on_with_week_start(d, week_first))
     }
 
     /// Consecutive satisfied periods counting back from `day`. Rolling
@@ -185,10 +207,15 @@ impl Habit {
     /// The period containing `day` is still open, so missing it (yet)
     /// doesn't zero the streak — it just doesn't count. Daily reduces to
     /// the classic "consecutive done-days, unticked today forgiven".
+    #[cfg(test)]
     pub fn streak_on(&self, day: NaiveDate) -> usize {
+        self.streak_on_with_week_start(day, WeekStart::Monday)
+    }
+
+    pub fn streak_on_with_week_start(&self, day: NaiveDate, week_first: WeekStart) -> usize {
         let mut streak = 0;
         let mut end = day;
-        while let Some(start) = self.period_start(end) {
+        while let Some(start) = self.period_start(end, week_first) {
             if self.count_between(start, end) >= self.target() {
                 streak += 1;
             } else if end != day {
@@ -205,9 +232,18 @@ impl Habit {
     /// The ledger's second line: the schedule, with progress where the
     /// target is flexible. True asks for the accent color (an
     /// in-progress flexible target).
+    #[cfg(test)]
     pub fn status_on(&self, day: NaiveDate) -> (String, bool) {
+        self.status_on_with_week_start(day, WeekStart::Monday)
+    }
+
+    pub fn status_on_with_week_start(
+        &self,
+        day: NaiveDate,
+        week_first: WeekStart,
+    ) -> (String, bool) {
         let next = || {
-            self.next_due(day)
+            self.next_due_with_week_start(day, week_first)
                 .map(|d| {
                     format!(
                         " · NEXT {}",
@@ -217,11 +253,13 @@ impl Habit {
                 .unwrap_or_default()
         };
         let count = self
-            .period_start(day)
+            .period_start(day, week_first)
             .map_or(0, |start| self.count_between(start, day));
         match self.schedule {
             Schedule::Daily => ("EVERY DAY".into(), false),
-            Schedule::EveryNDays { .. } if self.satisfied_on(day) && !self.done_on(day) => {
+            Schedule::EveryNDays { .. }
+                if self.satisfied_on_with_week_start(day, week_first) && !self.done_on(day) =>
+            {
                 (format!("{}{}", self.schedule.label(), next()), false)
             }
             Schedule::EveryNDays { .. } => (self.schedule.label(), false),
@@ -233,7 +271,14 @@ impl Habit {
                 false,
             ),
             Schedule::TimesPerWeek { times } => {
-                (format!("{count} OF {times} THIS WEEK · DUE BY SUN"), true)
+                let end = week_start(day, week_first) + Days::new(6);
+                (
+                    format!(
+                        "{count} OF {times} THIS WEEK · DUE BY {}",
+                        end.format("%a").to_string().to_uppercase()
+                    ),
+                    true,
+                )
             }
             Schedule::TimesInDays { times, .. } if count >= times => {
                 (format!("{}{}", self.schedule.label(), next()), false)
@@ -245,6 +290,7 @@ impl Habit {
     }
 
     /// [`Self::streak_on`] as of today.
+    #[cfg(test)]
     pub fn streak(&self) -> usize {
         self.streak_on(Local::now().date_naive())
     }
@@ -252,10 +298,15 @@ impl Habit {
     /// The longest run of consecutive satisfied periods ever, found by
     /// re-measuring the streak as of each check-in. Quadratic in the
     /// number of check-ins, which for a personal tracker is nothing.
+    #[cfg(test)]
     pub fn best_streak(&self) -> usize {
+        self.best_streak_with_week_start(WeekStart::Monday)
+    }
+
+    pub fn best_streak_with_week_start(&self, week_first: WeekStart) -> usize {
         self.days
             .iter()
-            .map(|&day| self.streak_on(day))
+            .map(|&day| self.streak_on_with_week_start(day, week_first))
             .max()
             .unwrap_or(0)
     }
@@ -382,8 +433,7 @@ pub struct Summary {
     pub done: usize,
     /// Habits due today.
     pub total: usize,
-    /// The last 7 days (oldest first) with the fraction of the habits due
-    /// that day that were done.
+    /// Seven ordered days with the fraction of due habits completed.
     pub week: Vec<(NaiveDate, f64)>,
     /// Best streak ever across all habits, with the habit's name.
     pub best: Option<(usize, String)>,
@@ -392,13 +442,39 @@ pub struct Summary {
 }
 
 impl Data {
+    #[cfg(test)]
     pub fn summary(&self) -> Summary {
         let today = Local::now().date_naive();
-        let week = (0..7)
+        let days = (0..7)
             .rev()
             .filter_map(|back| today.checked_sub_days(Days::new(back)))
+            .collect();
+        self.summary_for_days(today, days, WeekStart::Monday)
+    }
+
+    pub fn summary_with_week_start(&self, week_first: WeekStart) -> Summary {
+        let today = Local::now().date_naive();
+        let first = week_start(today, week_first);
+        let days = (0..7)
+            .filter_map(|ahead| first.checked_add_days(Days::new(ahead)))
+            .collect();
+        self.summary_for_days(today, days, week_first)
+    }
+
+    fn summary_for_days(
+        &self,
+        today: NaiveDate,
+        days: Vec<NaiveDate>,
+        week_first: WeekStart,
+    ) -> Summary {
+        let week = days
+            .into_iter()
             .map(|day| {
-                let due = self.habits.iter().filter(|h| h.due_on(day)).count();
+                let due = self
+                    .habits
+                    .iter()
+                    .filter(|h| h.due_on_with_week_start(day, week_first))
+                    .count();
                 let done = self.habits.iter().filter(|h| h.done_on(day)).count();
                 (
                     day,
@@ -412,12 +488,16 @@ impl Data {
             .collect();
         Summary {
             done: self.habits.iter().filter(|h| h.done_today()).count(),
-            total: self.habits.iter().filter(|h| h.due_on(today)).count(),
+            total: self
+                .habits
+                .iter()
+                .filter(|h| h.due_on_with_week_start(today, week_first))
+                .count(),
             week,
             best: self
                 .habits
                 .iter()
-                .map(|h| (h.best_streak(), h.name.clone()))
+                .map(|h| (h.best_streak_with_week_start(week_first), h.name.clone()))
                 .filter(|&(streak, _)| streak > 0)
                 .max_by_key(|&(streak, _)| streak),
             day_number: self
@@ -476,6 +556,24 @@ mod tests {
     /// Mon 27 Jul – Sun 2 Aug.
     fn fri() -> NaiveDate {
         nd(2026, 7, 31)
+    }
+
+    #[test]
+    fn week_boundaries_can_start_on_sunday() {
+        assert_eq!(week_start(fri(), WeekStart::Sunday), nd(2026, 7, 26));
+        assert_eq!(week_start(fri(), WeekStart::Wednesday), nd(2026, 7, 29));
+    }
+
+    #[test]
+    fn weekly_targets_use_the_selected_week_boundary() {
+        let habit = on(Schedule::TimesPerWeek { times: 1 }, &[nd(2026, 7, 26)]);
+
+        assert!(habit.due_on_with_week_start(fri(), WeekStart::Monday));
+        assert!(!habit.due_on_with_week_start(fri(), WeekStart::Sunday));
+        assert_eq!(
+            habit.status_on_with_week_start(fri(), WeekStart::Wednesday),
+            ("0 OF 1 THIS WEEK · DUE BY TUE".into(), true)
+        );
     }
 
     #[test]
