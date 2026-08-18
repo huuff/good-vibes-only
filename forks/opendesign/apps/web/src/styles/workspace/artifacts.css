@@ -1097,6 +1097,43 @@
   font-weight: 600;
   line-height: 1.25;
 }
+.settings-theme-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-6);
+  width: min(100%, 420px);
+  padding: var(--spacing-4);
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-subtle) 58%, var(--bg-panel));
+}
+.settings-theme-picker button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-8);
+  min-width: 0;
+  height: var(--spacing-42);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--font-size-13);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-quick) var(--ease-out), color var(--dur-quick) var(--ease-out), box-shadow var(--dur-quick) var(--ease-out);
+}
+.settings-theme-picker button:hover { color: var(--text-strong); }
+.settings-theme-picker button.active {
+  background: var(--bg-elevated);
+  color: var(--text-strong);
+  box-shadow: var(--shadow-sm);
+}
+.settings-theme-picker button:focus-visible {
+  outline: 2px solid var(--selected);
+  outline-offset: 1px;
+}
 .settings-general-select {
   position: relative;
   display: inline-flex;
