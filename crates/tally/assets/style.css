@@ -13,6 +13,24 @@
   --dim: color-mix(in srgb, var(--text) 35%, transparent);
 }
 
+.app {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app.theme-dark {
+  --bg: #151414;
+  --surface: #292626;
+  --text: #f3f2f2;
+  --accent: #ff5a3d;
+  --accent-down: #ec3013;
+  --divider: color-mix(in srgb, var(--text) 22%, transparent);
+  --muted: color-mix(in srgb, var(--text) 58%, transparent);
+  --dim: color-mix(in srgb, var(--text) 38%, transparent);
+  color-scheme: dark;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -126,6 +144,12 @@ button:disabled {
   letter-spacing: 0.12em;
 }
 
+.theme-dark .rail-new button,
+.theme-dark .bar-new {
+  background: var(--surface);
+  color: var(--accent);
+}
+
 .plus-sign {
   font-size: 20px;
   font-weight: 400;
@@ -171,6 +195,133 @@ button:disabled {
   justify-content: center;
   font-size: 24px;
   font-weight: 400;
+}
+
+/* --- Settings ------------------------------------------------------- */
+
+.settings-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-head {
+  padding: calc(20px + env(safe-area-inset-top)) 20px 20px;
+  border-bottom: 2px solid var(--divider);
+}
+
+.settings-head .title {
+  margin-top: 0;
+}
+
+.settings-body {
+  flex: 1;
+  overflow: auto;
+}
+
+.settings-label {
+  padding: 20px 20px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.settings-label.preferences-label {
+  padding-top: 24px;
+}
+
+.setting-row {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  border-top: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
+}
+
+.appearance-row {
+  min-height: 76px;
+  background: var(--surface);
+}
+
+.setting-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-copy strong,
+.week-row strong {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.setting-copy span {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.theme-switch {
+  width: 52px;
+  height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: none;
+}
+
+.theme-switch::before {
+  content: "";
+  width: 46px;
+  height: 26px;
+  padding: 3px;
+  border: 1px solid var(--divider);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--text) 15%, var(--surface));
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.theme-switch span {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text);
+  position: absolute;
+  margin-left: 4px;
+  transition: transform 0.16s ease-out;
+}
+
+.theme-switch.on::before {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.theme-switch.on span {
+  transform: translateX(20px);
+}
+
+.week-row {
+  justify-content: space-between;
+}
+
+.week-row select {
+  max-width: 12rem;
+  padding: 10px 22px 10px 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 16px;
+  text-align: right;
+  cursor: pointer;
 }
 
 /* --- Today header ---------------------------------------------------- */
@@ -964,6 +1115,14 @@ button:disabled {
 
   .head {
     padding: 24px 32px 18px;
+  }
+
+  .settings-head {
+    padding: 24px 32px;
+  }
+
+  .settings-body {
+    max-width: 720px;
   }
 
   .title {

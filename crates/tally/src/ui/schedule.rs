@@ -5,6 +5,7 @@
 
 use dioxus::prelude::*;
 
+use crate::preferences::WeekStart;
 use crate::store::Schedule;
 
 /// Which picker row is selected. Kept separate from the numbers so
@@ -75,7 +76,16 @@ impl ScheduleDraft {
         }
     }
 
-    fn hint(self) -> String {
+    fn hint(self, week_start: WeekStart) -> String {
+        let week_end = match week_start {
+            WeekStart::Monday => WeekStart::Sunday,
+            WeekStart::Tuesday => WeekStart::Monday,
+            WeekStart::Wednesday => WeekStart::Tuesday,
+            WeekStart::Thursday => WeekStart::Wednesday,
+            WeekStart::Friday => WeekStart::Thursday,
+            WeekStart::Saturday => WeekStart::Friday,
+            WeekStart::Sunday => WeekStart::Saturday,
+        };
         match self.kind {
             Kind::Daily => "Tick it off every single day.".into(),
             Kind::EveryN => format!(
@@ -83,12 +93,18 @@ impl ScheduleDraft {
                 self.every_n
             ),
             Kind::PerWeek if self.per_week == 1 => {
-                "One check-in any day between Monday and Sunday keeps the week.".into()
+                format!(
+                    "One check-in any day between {} and {} keeps the week.",
+                    week_start.label(),
+                    week_end.label()
+                )
             }
             Kind::PerWeek => format!(
-                "Any {} check-ins between Monday and Sunday count. The streak keeps \
+                "Any {} check-ins between {} and {} count. The streak keeps \
                  going as long as each week hits its target.",
-                self.per_week
+                self.per_week,
+                week_start.label(),
+                week_end.label()
             ),
             Kind::InDays if self.times == 1 => {
                 format!("One check-in within any {} consecutive days.", self.window)
@@ -185,7 +201,7 @@ fn option_row(mut draft: Signal<ScheduleDraft>, kind: Kind, label: Element) -> E
     }
 }
 
-pub fn schedule_picker(draft: Signal<ScheduleDraft>) -> Element {
+pub fn schedule_picker(draft: Signal<ScheduleDraft>, week_start: WeekStart) -> Element {
     let d = draft();
     rsx! {
         div { class: "how-label", "HOW OFTEN?" }
@@ -237,6 +253,6 @@ pub fn schedule_picker(draft: Signal<ScheduleDraft>) -> Element {
                 },
             )}
         }
-        div { class: "opt-hint", {d.hint()} }
+        div { class: "opt-hint", {d.hint(week_start)} }
     }
 }

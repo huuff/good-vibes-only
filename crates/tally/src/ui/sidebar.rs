@@ -3,10 +3,12 @@
 
 use dioxus::prelude::*;
 
+use crate::preferences::Preferences;
 use crate::store::Data;
 
-pub fn sidebar(data: Signal<Data>) -> Element {
-    let s = data().summary();
+pub fn sidebar(data: Signal<Data>, preferences: Signal<Preferences>) -> Element {
+    let s = data().summary_with_week_start(preferences().week_start);
+    let today = chrono::Local::now().date_naive();
     #[allow(clippy::manual_checked_ops)]
     let pct = if s.total == 0 {
         0
@@ -35,19 +37,19 @@ pub fn sidebar(data: Signal<Data>) -> Element {
             div { class: "side-block",
                 div { class: "side-label", "This week" }
                 div { class: "bars",
-                    for (i , (day , frac)) in s.week.iter().enumerate() {
+                    for (day , frac) in &s.week {
                         div {
                             key: "{day}",
-                            class: if i == 6 { "today" } else { "" },
+                            class: if *day == today { "today" } else { "" },
                             style: "height:{frac * 100.0:.0}%",
                         }
                     }
                 }
                 div { class: "bars-days",
-                    for (i , (day , _)) in s.week.iter().enumerate() {
+                    for (day , _) in &s.week {
                         span {
                             key: "{day}",
-                            class: if i == 6 { "today" } else { "" },
+                            class: if *day == today { "today" } else { "" },
                             {day.format("%a").to_string()[..2].to_uppercase()}
                         }
                     }
