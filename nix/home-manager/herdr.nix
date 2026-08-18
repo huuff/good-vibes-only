@@ -25,39 +25,26 @@ let
     "antigravity-cli"
     "grok"
   ];
-  integrationType = lib.types.enum integrationNames;
+  enabledIntegrations = lib.filter (name: cfg.integrations.${name}.enable) integrationNames;
   integrationsFile = "${config.xdg.stateHome}/herdr/home-manager-integrations";
 in
 {
-  options.programs.herdr.integrations = lib.mkOption {
-    type = lib.types.listOf integrationType;
-    default = [ ];
-    example = [
-      "claude"
-      "codex"
-      "opencode"
-    ];
-    description = ''
-      Agent integrations to install with {command}`herdr integration
-      install` during Home Manager activation. Herdr writes these hooks or
-      plugins into each agent's configuration directory, which must already
-      exist. Integrations removed from this list are uninstalled if they
-      were previously managed by this module; integrations installed by
-      other means are left alone.
-    '';
-  };
+  options.programs.herdr.integrations = lib.genAttrs integrationNames (name: {
+    enable = lib.mkEnableOption "Herdr's ${name} integration" // {
+      description = ''
+        Whether to install Herdr's ${name} integration during Home Manager
+        activation. Herdr writes its hook or plugin into the agent's
+        configuration directory, which must already exist. Disabling an
+        integration uninstalls it if it was previously managed by this module;
+        integrations installed by other means are left alone.
+      '';
+    };
+  });
 
   config = lib.mkIf cfg.enable {
-    assertions = [
-      {
-        assertion = lib.length cfg.integrations == lib.length (lib.unique cfg.integrations);
-        message = "programs.herdr.integrations must not contain duplicates";
-      }
-    ];
-
     home.activation.herdrIntegrations = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       integrationsFile=${lib.escapeShellArg integrationsFile}
-      currentIntegrations=${lib.escapeShellArg " ${lib.concatStringsSep " " cfg.integrations} "}
+      currentIntegrations=${lib.escapeShellArg " ${lib.concatStringsSep " " enabledIntegrations} "}
       mkdir -p "$(dirname "$integrationsFile")"
 
       if [[ -f "$integrationsFile" ]]; then
@@ -72,12 +59,12 @@ in
 
       ${lib.concatMapStringsSep "\n" (integration: ''
         ${herdr} integration install ${lib.escapeShellArg integration}
-      '') cfg.integrations}
+      '') enabledIntegrations}
 
       newIntegrationsFile="$(mktemp "''${integrationsFile}.XXXXXX")"
       ${lib.concatMapStringsSep "\n" (integration: ''
         printf '%s\n' ${lib.escapeShellArg integration} >> "$newIntegrationsFile"
-      '') cfg.integrations}
+      '') enabledIntegrations}
       mv "$newIntegrationsFile" "$integrationsFile"
     '';
   };

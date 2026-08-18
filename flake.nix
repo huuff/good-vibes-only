@@ -278,11 +278,11 @@
                     session.resume_agents_on_restore = true;
                     terminal.default_shell = "nu";
                   };
-                  integrations = [
-                    "claude"
-                    "codex"
-                    "opencode"
-                  ];
+                  integrations = {
+                    claude.enable = true;
+                    codex.enable = true;
+                    opencode.enable = true;
+                  };
                 };
               }
             ];
