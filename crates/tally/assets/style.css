@@ -297,6 +297,7 @@ button:disabled {
 
 .theme-switch::before {
   content: "";
+  box-sizing: border-box;
   width: 46px;
   height: 26px;
   padding: 3px;
