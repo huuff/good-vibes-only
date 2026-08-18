@@ -9,8 +9,12 @@ let
   cfg = config.programs.herdr;
   enabled = name: cfg.integrations.${name}.enable;
 
-  integrationAssets =
-    pkgs.runCommand "herdr-integration-assets"
+  mkIntegrationAsset =
+    {
+      name,
+      source,
+    }:
+    pkgs.runCommand "herdr-${name}-integration-asset"
       {
         nativeBuildInputs = [ cfg.package ];
       }
@@ -20,15 +24,24 @@ let
         export CODEX_HOME="$HOME/codex"
 
         mkdir -p "$CLAUDE_CONFIG_DIR" "$CODEX_HOME" "$HOME/.config/opencode"
-        herdr integration install claude
-        herdr integration install codex
-        herdr integration install opencode
-
-        mkdir -p "$out/claude" "$out/codex" "$out/opencode"
-        cp "$CLAUDE_CONFIG_DIR/hooks/herdr-agent-state.sh" "$out/claude/"
-        cp "$CODEX_HOME/herdr-agent-state.sh" "$out/codex/"
-        cp "$HOME/.config/opencode/plugins/herdr-agent-state.js" "$out/opencode/"
+        herdr integration install ${name}
+        cp ${source} "$out"
       '';
+
+  integrationAssets = {
+    claude = mkIntegrationAsset {
+      name = "claude";
+      source = ''"$CLAUDE_CONFIG_DIR/hooks/herdr-agent-state.sh"'';
+    };
+    codex = mkIntegrationAsset {
+      name = "codex";
+      source = ''"$CODEX_HOME/herdr-agent-state.sh"'';
+    };
+    opencode = mkIntegrationAsset {
+      name = "opencode";
+      source = ''"$HOME/.config/opencode/plugins/herdr-agent-state.js"'';
+    };
+  };
 
   mkIntegrationOption = name: {
     enable = lib.mkEnableOption "Herdr's ${name} integration" // {
@@ -80,7 +93,7 @@ in
           hooks = [
             {
               type = "command";
-              command = "bash '${integrationAssets}/claude/herdr-agent-state.sh' session";
+              command = "bash '${integrationAssets.claude}' session";
               timeout = 10;
             }
           ];
@@ -95,7 +108,7 @@ in
           hooks = [
             {
               type = "command";
-              command = "bash '${integrationAssets}/codex/herdr-agent-state.sh' session";
+              command = "bash '${integrationAssets.codex}' session";
               timeout = 10;
             }
           ];
@@ -104,7 +117,7 @@ in
     };
 
     xdg.configFile."opencode/plugins/herdr-agent-state.js" = lib.mkIf (enabled "opencode") {
-      source = "${integrationAssets}/opencode/herdr-agent-state.js";
+      source = integrationAssets.opencode;
     };
   };
 }
