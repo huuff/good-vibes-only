@@ -1,28 +1,196 @@
-diff --git a/codex-rs/tui/Cargo.toml b/codex-rs/tui/Cargo.toml
-index 0b67681..00678ac 100644
---- a/codex-rs/tui/Cargo.toml
-+++ b/codex-rs/tui/Cargo.toml
-@@ -35,5 +35,6 @@ codex-cloud-config = { workspace = true }
- codex-config = { workspace = true }
- codex-connectors = { workspace = true }
-+codex-core = { workspace = true }
- codex-core-plugins = { workspace = true }
- codex-exec-server = { workspace = true }
- codex-features = { workspace = true }
+diff --git a/codex-rs/app-server/src/config_manager_service.rs b/codex-rs/app-server/src/config_manager_service.rs
+index 1605e37..d9c376b 100644
+--- a/codex-rs/app-server/src/config_manager_service.rs
++++ b/codex-rs/app-server/src/config_manager_service.rs
+@@ -17,6 +17,7 @@ use codex_config::ConfigLayerMetadata;
+ use codex_config::ConfigLayerSource;
+ use codex_config::ConfigLayerStack;
+ use codex_config::ConfigRequirementsToml;
++use codex_config::PROJECT_TRUST_TOML_FILE;
+ use codex_config::ShellEnvironmentPolicyFilterRepresentation;
+ use codex_config::config_toml::ConfigToml;
+ use codex_config::merge_toml_values;
+@@ -236,12 +237,81 @@ impl ConfigManager {
+             .edits
+             .into_iter()
+             .map(|edit| (edit.key_path, edit.value, edit.merge_strategy))
+-            .collect();
++            .collect::<Vec<_>>();
++
++        if params.file_path.is_none() && !edits.is_empty() && edits.iter().all(is_hook_state_edit) {
++            return self.apply_hook_state_edits(edits).await;
++        }
+ 
+         self.apply_edits(params.file_path, params.expected_version, edits)
+             .await
+     }
+ 
++    async fn apply_hook_state_edits(
++        &self,
++        edits: Vec<(String, JsonValue, MergeStrategy)>,
++    ) -> Result<ConfigWriteResponse, ConfigManagerError> {
++        let state_path =
++            AbsolutePathBuf::from_absolute_path(self.codex_home().join(PROJECT_TRUST_TOML_FILE))
++                .map_err(|err| ConfigManagerError::io("failed to resolve trust state path", err))?;
++        let state_layer = create_empty_user_layer(&state_path).await?;
++        let mut state_config = state_layer.config;
++        let mut config_edits = Vec::new();
++
++        for (key_path, value, strategy) in edits {
++            let segments = parse_key_path(&key_path).map_err(|message| {
++                ConfigManagerError::write(ConfigWriteErrorCode::ConfigValidationError, message)
++            })?;
++            let parsed_value = parse_value(value).map_err(|message| {
++                ConfigManagerError::write(ConfigWriteErrorCode::ConfigValidationError, message)
++            })?;
++            let original_value = value_at_path(&state_config, &segments).cloned();
++            apply_merge(
++                &mut state_config,
++                &segments,
++                parsed_value.as_ref(),
++                strategy,
++            )
++            .map_err(|err| match err {
++                MergeError::Validation(message) => {
++                    ConfigManagerError::write(ConfigWriteErrorCode::ConfigValidationError, message)
++                }
++            })?;
++            let updated_value = value_at_path(&state_config, &segments).cloned();
++            if original_value != updated_value {
++                config_edits.push(match updated_value {
++                    Some(value) => ConfigEdit::SetPath {
++                        segments,
++                        value: toml_value_to_item(&value).map_err(|err| {
++                            ConfigManagerError::anyhow("failed to build hook state edits", err)
++                        })?,
++                    },
++                    None => ConfigEdit::ClearPath { segments },
++                });
++            }
++        }
++
++        // Reject anything outside the mutable project/hook state schema.
++        let _: HookTrustStateToml = state_config
++            .clone()
++            .try_into()
++            .map_err(|err| ConfigManagerError::toml("invalid hook trust state", err))?;
++        if !config_edits.is_empty() {
++            ConfigEditsBuilder::for_config_path(state_path.as_path())
++                .with_edits(config_edits)
++                .apply()
++                .await
++                .map_err(|err| ConfigManagerError::anyhow("failed to persist hook trust", err))?;
++        }
++        let updated_layer = create_empty_user_layer(&state_path).await?;
++        Ok(ConfigWriteResponse {
++            status: WriteStatus::Ok,
++            version: updated_layer.version,
++            file_path: state_path,
++            overridden_metadata: None,
++        })
++    }
++
+     async fn apply_edits(
+         &self,
+         file_path: Option<String>,
+@@ -455,6 +525,34 @@ impl ConfigManager {
+     }
+ }
+ 
++fn is_hook_state_edit(edit: &(String, JsonValue, MergeStrategy)) -> bool {
++    parse_key_path(&edit.0)
++        .is_ok_and(|segments| matches!(segments.as_slice(), [hooks, state, ..] if hooks == "hooks" && state == "state"))
++}
++
++#[derive(serde::Deserialize)]
++#[serde(deny_unknown_fields)]
++struct HookTrustStateToml {
++    #[allow(dead_code)]
++    projects: Option<std::collections::HashMap<String, ProjectTrustStateToml>>,
++    #[allow(dead_code)]
++    hooks: Option<HookTrustHooksToml>,
++}
++
++#[derive(serde::Deserialize)]
++#[serde(deny_unknown_fields)]
++struct HookTrustHooksToml {
++    #[allow(dead_code)]
++    state: std::collections::BTreeMap<String, codex_config::HookStateToml>,
++}
++
++#[derive(serde::Deserialize)]
++#[serde(deny_unknown_fields)]
++struct ProjectTrustStateToml {
++    #[allow(dead_code)]
++    trust_level: Option<codex_protocol::config_types::TrustLevel>,
++}
++
+ async fn create_empty_user_layer(
+     config_toml: &AbsolutePathBuf,
+ ) -> Result<ConfigLayerEntry, ConfigManagerError> {
+diff --git a/codex-rs/app-server/src/config_manager_service_tests.rs b/codex-rs/app-server/src/config_manager_service_tests.rs
+index 6ced2a7..939267b 100644
+--- a/codex-rs/app-server/src/config_manager_service_tests.rs
++++ b/codex-rs/app-server/src/config_manager_service_tests.rs
+@@ -61,6 +61,44 @@ X-Doc = "42"
+     );
+ }
+ 
++#[tokio::test]
++async fn batch_write_persists_hook_state_outside_config_toml() -> Result<()> {
++    let tmp = tempdir()?;
++    let config_path = tmp.path().join(CONFIG_TOML_FILE);
++    std::fs::write(&config_path, "model = \"gpt-declarative\"\n")?;
++    let service = ConfigManager::without_managed_config_for_tests(tmp.path().to_path_buf());
++
++    let response = service
++        .batch_write(ConfigBatchWriteParams {
++            edits: vec![codex_app_server_protocol::ConfigEdit {
++                key_path: "hooks.state".to_string(),
++                value: serde_json::json!({
++                    "plugin@test:hooks/hooks.json:session_start:0:0": {
++                        "trusted_hash": "sha256:trusted"
++                    }
++                }),
++                merge_strategy: MergeStrategy::Upsert,
++            }],
++            file_path: None,
++            expected_version: None,
++            reload_user_config: true,
++        })
++        .await?;
++
++    assert_eq!(
++        std::fs::read_to_string(config_path)?,
++        "model = \"gpt-declarative\"\n"
++    );
++    assert_eq!(
++        response.file_path.as_path(),
++        tmp.path().join(PROJECT_TRUST_TOML_FILE)
++    );
++    let state = std::fs::read_to_string(tmp.path().join(PROJECT_TRUST_TOML_FILE))?;
++    assert!(state.contains("[hooks.state"));
++    assert!(state.contains("trusted_hash = \"sha256:trusted\""));
++    Ok(())
++}
++
+ #[tokio::test]
+ async fn write_value_preserves_comments_and_order() -> Result<()> {
+     let tmp = tempdir().expect("tempdir");
 diff --git a/codex-rs/config/src/lib.rs b/codex-rs/config/src/lib.rs
-index df3e45d..23b354b 100644
+index dec1829..d26ad4e 100644
 --- a/codex-rs/config/src/lib.rs
 +++ b/codex-rs/config/src/lib.rs
-@@ -32,6 +32,7 @@ mod tui_keymap;
+@@ -34,6 +34,7 @@ mod tui_keymap;
  pub mod types;
-
+ 
  pub const CONFIG_TOML_FILE: &str = "config.toml";
 +pub const PROJECT_TRUST_TOML_FILE: &str = "project-trust.toml";
-
+ 
+ pub use auth_policy::ManagedAuthPolicy;
  pub use cloud_config_bundle::CloudConfigBundle;
- pub use cloud_config_bundle::CloudConfigBundleLayers;
 diff --git a/codex-rs/config/src/loader/mod.rs b/codex-rs/config/src/loader/mod.rs
-index 00110bc..73b86d0 100644
+index 63df1ec..301debc 100644
 --- a/codex-rs/config/src/loader/mod.rs
 +++ b/codex-rs/config/src/loader/mod.rs
 @@ -8,6 +8,7 @@ use self::layer_io::LoadedConfigLayers;
@@ -33,7 +201,7 @@ index 00110bc..73b86d0 100644
  use crate::ProfileV2Name;
  use crate::RequirementsLayerEntry;
  use crate::compose_requirements;
-@@ -43,6 +44,7 @@ use codex_utils_absolute_path::AbsolutePathBufGuard;
+@@ -45,6 +46,7 @@ use codex_utils_absolute_path::AbsolutePathBufGuard;
  use codex_utils_path_uri::PathUri;
  use dunce::canonicalize as normalize_path;
  use serde::Deserialize;
@@ -41,10 +209,10 @@ index 00110bc..73b86d0 100644
  use std::io;
  use std::path::Path;
  #[cfg(windows)]
-@@ -288,6 +290,28 @@ pub async fn load_config_layers_state(
+@@ -299,6 +301,28 @@ pub async fn load_config_layers_state(
          );
      }
-
+ 
 +    // Project trust is mutable application state, so keep it out of the user's
 +    // declarative config.toml. Filter the file through the trust-only schema
 +    // before adding it to the effective configuration.
@@ -70,7 +238,7 @@ index 00110bc..73b86d0 100644
      let mut startup_warnings = None;
      if let Some(cwd) = cwd {
          let mut merged_so_far = TomlValue::Table(toml::map::Map::new());
-@@ -317,7 +341,7 @@ pub async fn load_config_layers_state(
+@@ -328,7 +352,7 @@ pub async fn load_config_layers_state(
              &cwd,
              &project_root_markers,
              codex_home,
@@ -79,23 +247,66 @@ index 00110bc..73b86d0 100644
          )
          .await
          {
-@@ -823,7 +847,7 @@ struct ProjectTrustContext {
+@@ -849,9 +873,15 @@ struct ProjectTrustContext {
      user_config_file: AbsolutePathBuf,
  }
-
+ 
 -#[derive(Deserialize)]
 +#[derive(Deserialize, Serialize)]
  struct ProjectTrustConfigToml {
      projects: Option<std::collections::HashMap<String, ProjectConfig>>,
++    hooks: Option<HookTrustConfigToml>,
++}
++
++#[derive(Deserialize, Serialize)]
++struct HookTrustConfigToml {
++    state: std::collections::BTreeMap<String, crate::HookStateToml>,
  }
+ 
+ struct ProjectTrustDecision {
 diff --git a/codex-rs/config/src/loader/tests.rs b/codex-rs/config/src/loader/tests.rs
-index 068e29a..ca41a49 100644
+index 068e29a..763a201 100644
 --- a/codex-rs/config/src/loader/tests.rs
 +++ b/codex-rs/config/src/loader/tests.rs
-@@ -13,6 +13,60 @@ use tempfile::tempdir;
-
+@@ -13,6 +13,95 @@ use tempfile::tempdir;
+ 
  struct TestFileSystem;
-
+ 
++#[tokio::test]
++async fn dedicated_state_file_overrides_legacy_hook_state_and_filters_other_settings() {
++    let tmp = tempdir().expect("tempdir");
++    let codex_home = tmp.path().join("codex-home");
++    std::fs::create_dir_all(&codex_home).expect("create codex home");
++    std::fs::write(
++        codex_home.join(CONFIG_TOML_FILE),
++        "model=\"declarative\"\n[hooks.state.example]\ntrusted_hash=\"sha256:old\"",
++    )
++    .expect("write user config");
++    std::fs::write(
++        codex_home.join(crate::PROJECT_TRUST_TOML_FILE),
++        "model=\"ignored\"\n[hooks.state.example]\ntrusted_hash=\"sha256:new\"",
++    )
++    .expect("write mutable state");
++
++    let stack = load_config_layers_state(
++        &TestFileSystem,
++        &codex_home,
++        None,
++        &[],
++        LoaderOverrides::without_managed_config_for_tests(),
++        &crate::NoopThreadConfigLoader,
++    )
++    .await
++    .expect("load config layers");
++    let effective = stack.effective_config();
++
++    assert_eq!(effective["model"].as_str(), Some("declarative"));
++    assert_eq!(
++        effective["hooks"]["state"]["example"]["trusted_hash"].as_str(),
++        Some("sha256:new")
++    );
++}
++
 +#[tokio::test]
 +async fn dedicated_project_trust_file_overrides_legacy_config() {
 +    let tmp = tempdir().expect("tempdir");
@@ -154,13 +365,13 @@ index 068e29a..ca41a49 100644
      fn canonicalize<'a>(
          &'a self,
 diff --git a/codex-rs/core/src/config/config_tests.rs b/codex-rs/core/src/config/config_tests.rs
-index a52838b..6944087 100644
+index e3e91a6..100eb38 100644
 --- a/codex-rs/core/src/config/config_tests.rs
 +++ b/codex-rs/core/src/config/config_tests.rs
-@@ -9184,6 +9184,25 @@ trust_level = "trusted"
+@@ -9555,6 +9555,25 @@ trust_level = "trusted"
      Ok(())
  }
-
+ 
 +#[test]
 +fn test_set_project_trusted_writes_dedicated_state_file() -> anyhow::Result<()> {
 +    let codex_home = tempfile::tempdir()?;
@@ -184,29 +395,41 @@ index a52838b..6944087 100644
  fn test_set_project_trusted_converts_inline_to_explicit() -> anyhow::Result<()> {
      let project_dir = Path::new("/some/path");
 diff --git a/codex-rs/core/src/config/mod.rs b/codex-rs/core/src/config/mod.rs
-index 1fe1b80..14ec296 100644
+index fc3b7f5..3af9be9 100644
 --- a/codex-rs/core/src/config/mod.rs
 +++ b/codex-rs/core/src/config/mod.rs
-@@ -2164,7 +2164,7 @@ pub(crate) fn set_project_trust_level_inner(
+@@ -2323,7 +2323,7 @@ pub(crate) fn set_project_trust_level_inner(
      Ok(())
  }
-
+ 
 -/// Patch `CODEX_HOME/config.toml` project state to set trust level.
 +/// Patch `CODEX_HOME/project-trust.toml` project state to set trust level.
  /// Use with caution.
  pub fn set_project_trust_level(
      codex_home: &Path,
-@@ -2173,7 +2173,7 @@ pub fn set_project_trust_level(
+@@ -2332,7 +2332,7 @@ pub fn set_project_trust_level(
  ) -> anyhow::Result<()> {
      use crate::config::edit::ConfigEditsBuilder;
-
+ 
 -    ConfigEditsBuilder::new(codex_home)
 +    ConfigEditsBuilder::for_config_path(&codex_home.join(codex_config::PROJECT_TRUST_TOML_FILE))
          .set_project_trust_level(project_path, trust_level)
          .apply_blocking()
  }
+diff --git a/codex-rs/tui/Cargo.toml b/codex-rs/tui/Cargo.toml
+index 8d79afc..d7d4154 100644
+--- a/codex-rs/tui/Cargo.toml
++++ b/codex-rs/tui/Cargo.toml
+@@ -34,6 +34,7 @@ codex-install-context = { workspace = true }
+ codex-cloud-config = { workspace = true }
+ codex-config = { workspace = true }
+ codex-connectors = { workspace = true }
++codex-core = { workspace = true }
+ codex-core-plugins = { workspace = true }
+ codex-exec-server = { workspace = true }
+ codex-features = { workspace = true }
 diff --git a/codex-rs/tui/src/config_update.rs b/codex-rs/tui/src/config_update.rs
-index a71f34b..eaa3dc9 100644
+index a71f34b..033a6fa 100644
 --- a/codex-rs/tui/src/config_update.rs
 +++ b/codex-rs/tui/src/config_update.rs
 @@ -15,16 +15,15 @@ use codex_app_server_protocol::MergeStrategy;
@@ -225,12 +448,12 @@ index a71f34b..eaa3dc9 100644
  use std::path::Path;
 +use std::path::PathBuf;
  use uuid::Uuid;
-
+ 
  pub(crate) fn replace_config_value(key_path: impl Into<String>, value: JsonValue) -> ConfigEdit {
 @@ -48,16 +47,6 @@ pub(crate) fn format_config_error(err: &impl Display) -> String {
      format!("{err:#}")
  }
-
+ 
 -fn trusted_project_edit(project_path: &Path) -> ConfigEdit {
 -    let project_key = project_trust_key(project_path)
 -        .replace('\\', "\\\\")
@@ -247,7 +470,7 @@ index a71f34b..eaa3dc9 100644
 @@ -163,11 +152,18 @@ pub(crate) async fn write_config_batch(
          .wrap_err("config/batchWrite failed in TUI")
  }
-
+ 
 -pub(crate) async fn write_trusted_project(
 -    request_handle: AppServerRequestHandle,
 -    project_path: &Path,
@@ -266,7 +489,7 @@ index a71f34b..eaa3dc9 100644
 +    .wrap_err("project trust persistence task panicked")?
 +    .map_err(|err| color_eyre::eyre::eyre!("failed to persist project trust: {err:#}"))
  }
-
+ 
  pub(crate) async fn read_effective_config(
 diff --git a/codex-rs/tui/src/config_update_tests.rs b/codex-rs/tui/src/config_update_tests.rs
 index ee75088..0a783ec 100644
@@ -277,7 +500,7 @@ index ee75088..0a783ec 100644
  use color_eyre::eyre::WrapErr;
  use pretty_assertions::assert_eq;
 -use std::path::Path;
-
+ 
 -#[test]
 -fn app_scoped_key_path_quotes_dotted_app_ids() {
 -    assert_eq!(
@@ -306,7 +529,7 @@ index ee75088..0a783ec 100644
 +    .expect("read project trust state");
 +    assert!(state.contains("trust_level = \"trusted\""));
  }
-
+ 
  #[test]
 -fn trusted_project_edit_targets_project_trust_level() {
 +fn app_scoped_key_path_quotes_dotted_app_ids() {
@@ -321,9 +544,9 @@ index ee75088..0a783ec 100644
 +        "apps.\"plugin.linear\".enabled"
      );
  }
-
+ 
 diff --git a/codex-rs/tui/src/onboarding/onboarding_screen.rs b/codex-rs/tui/src/onboarding/onboarding_screen.rs
-index 405b377..f3d5cd3 100644
+index 2f65453..9e89358 100644
 --- a/codex-rs/tui/src/onboarding/onboarding_screen.rs
 +++ b/codex-rs/tui/src/onboarding/onboarding_screen.rs
 @@ -47,6 +47,7 @@ use crate::tui::FrameRequester;
@@ -333,9 +556,9 @@ index 405b377..f3d5cd3 100644
 +use std::path::PathBuf;
  use std::sync::Arc;
  use std::sync::RwLock;
-
+ 
 @@ -75,6 +76,7 @@ pub(crate) trait StepStateProvider {
-
+ 
  pub(crate) struct OnboardingScreen {
      request_frame: FrameRequester,
 +    codex_home: PathBuf,
@@ -350,7 +573,7 @@ index 405b377..f3d5cd3 100644
          let auth_config = config.auth_config();
          let mut steps: Vec<Step> = Vec::new();
          steps.push(Step::Welcome(WelcomeWidget::new(
-@@ -162,6 +165,7 @@ impl OnboardingScreen {
+@@ -164,6 +167,7 @@ impl OnboardingScreen {
          }
          Self {
              request_frame: tui.frame_requester(),
@@ -358,15 +581,15 @@ index 405b377..f3d5cd3 100644
              steps,
              is_done: false,
              should_exit: false,
-@@ -478,7 +482,6 @@ pub(crate) async fn run_onboarding_app(
+@@ -480,7 +484,6 @@ pub(crate) async fn run_onboarding_app(
  ) -> Result<OnboardingResult> {
      use tokio_stream::StreamExt;
-
+ 
 -    let app_server_request_handle = args.app_server_request_handle.clone();
      let mut onboarding_screen = OnboardingScreen::new(tui, args).await;
      let mut directory_trust_persisted = false;
      // One-time guard to fully clear the screen after ChatGPT login success message is shown
-@@ -499,10 +502,8 @@ pub(crate) async fn run_onboarding_app(
+@@ -502,10 +505,8 @@ pub(crate) async fn run_onboarding_app(
                          TuiEvent::Key(key_event) => {
                              onboarding_screen.handle_key_event(key_event);
                              if !directory_trust_persisted {
@@ -379,10 +602,10 @@ index 405b377..f3d5cd3 100644
                                  .await;
                              }
                          }
-@@ -574,10 +575,7 @@ pub(crate) async fn run_onboarding_app(
+@@ -577,10 +578,7 @@ pub(crate) async fn run_onboarding_app(
      })
  }
-
+ 
 -async fn persist_selected_trust(
 -    onboarding_screen: &mut OnboardingScreen,
 -    request_handle: Option<AppServerRequestHandle>,
@@ -391,10 +614,10 @@ index 405b377..f3d5cd3 100644
      let Some((trust_step_index, trust_target)) = onboarding_screen
          .steps
          .iter()
-@@ -594,12 +592,7 @@ async fn persist_selected_trust(
+@@ -597,12 +595,7 @@ async fn persist_selected_trust(
          return false;
      };
-
+ 
 -    let result = match request_handle {
 -        Some(request_handle) => write_trusted_project(request_handle, &trust_target)
 -            .await
@@ -402,10 +625,10 @@ index 405b377..f3d5cd3 100644
 -        None => Err(color_eyre::eyre::eyre!("app server unavailable")),
 -    };
 +    let result = write_trusted_project(onboarding_screen.codex_home.clone(), &trust_target).await;
-
+ 
      match result {
          Ok(()) => true,
-@@ -690,6 +683,7 @@ mod tests {
+@@ -693,6 +686,7 @@ mod tests {
      async fn trust_persistence_failure_keeps_trust_step_in_progress() {
          let mut onboarding_screen = OnboardingScreen {
              request_frame: FrameRequester::test_dummy(),
@@ -413,13 +636,13 @@ index 405b377..f3d5cd3 100644
              steps: vec![Step::TrustDirectory(TrustDirectoryWidget {
                  cwd: PathBuf::from("/workspace/project"),
                  trust_target: PathBuf::from("/workspace/project"),
-@@ -703,8 +697,7 @@ mod tests {
+@@ -706,8 +700,7 @@ mod tests {
              should_exit: false,
          };
-
+ 
 -        let persisted =
 -            persist_selected_trust(&mut onboarding_screen, /*request_handle*/ None).await;
 +        let persisted = persist_selected_trust(&mut onboarding_screen).await;
-
+ 
          assert!(!persisted);
          let Step::TrustDirectory(widget) = &onboarding_screen.steps[0] else {

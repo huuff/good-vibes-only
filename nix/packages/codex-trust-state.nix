@@ -66,6 +66,6 @@ codexUpstream.overrideAttrs (old: {
   };
 
   meta = old.meta // {
-    description = "Codex CLI with project trust stored outside config.toml";
+    description = "Codex CLI with project and hook trust stored outside config.toml";
   };
 })

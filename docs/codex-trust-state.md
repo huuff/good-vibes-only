@@ -1,13 +1,19 @@
 # Codex project trust state
 
 The `codex-trust-state` package is a small patch over upstream Codex CLI. It
-stores project trust decisions in `$CODEX_HOME/project-trust.toml` (normally
-`~/.codex/project-trust.toml`) instead of modifying `config.toml`.
+stores project trust decisions and mutable hook state in
+`$CODEX_HOME/project-trust.toml` (normally `~/.codex/project-trust.toml`)
+instead of modifying `config.toml`.
 
 Project trust is mutable application state: Codex records it when a project is
 trusted or explicitly marked untrusted. Keeping it separate prevents routine
 trust prompts from rewriting a declarative, potentially version-controlled
 `config.toml`.
+
+Hook trust approvals (and hook enable/disable state, which shares the same
+upstream state table) are mutable for the same reason. The patched config RPC
+routes writes below `hooks.state` to the dedicated state file, including
+approvals made by the TUI and automatic trust of newly installed plugin hooks.
 
 ## Install or run
 
@@ -33,15 +39,19 @@ Codex creates the state file as needed, using the same project table format:
 ```toml
 [projects."/home/user/src/example"]
 trust_level = "trusted"
+
+[hooks.state."example@local:hooks/hooks.json:session_start:0:0"]
+trusted_hash = "sha256:example"
 ```
 
 Both `trusted` and `untrusted` decisions are stored there. Existing
-`[projects]` entries in `config.toml` remain supported, so no manual migration
-is required. If a project appears in both files, `project-trust.toml` wins. New
-trust decisions are written only to `project-trust.toml`.
+`[projects]` and `[hooks.state]` entries in `config.toml` remain supported, so
+no manual migration is required. If state appears in both files,
+`project-trust.toml` wins. New project and hook state is written only to
+`project-trust.toml`.
 
-The file is filtered through a trust-only schema when loaded; unrelated Codex
-settings placed there do not become configuration.
+The file is filtered through a state-only schema when loaded; hook definitions
+and unrelated Codex settings placed there do not become configuration.
 
 ## Maintenance
 
