@@ -1,5 +1,5 @@
 //! The Today ledger: date header with the done/total meter, then the
-//! habit list split into DUE TODAY and NOT DUE TODAY (design option 3b).
+//! habit list split into DUE and COMPLETED (design option 3b).
 //! Each row: checkbox, name + schedule/progress line, a 14-day dot strip
 //! (desktop only), and the streak numeral.
 
@@ -167,7 +167,7 @@ pub fn ledger(data: Signal<Data>, overlays: Overlays, preferences: Signal<Prefer
                 }
             }
             if !later.is_empty() && !due.is_empty() {
-                div { class: "sec-head", "DUE TODAY" }
+                div { class: "sec-head", "DUE" }
             }
             for habit in due {
                 {row(habit, data, overlays, false, week_start)}
