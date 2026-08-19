@@ -1,15 +1,15 @@
 diff --git a/codex-rs/app-server/src/config_manager_service.rs b/codex-rs/app-server/src/config_manager_service.rs
-index 1605e37..d9c376b 100644
+index 1605e37..1f9aa9d 100644
 --- a/codex-rs/app-server/src/config_manager_service.rs
 +++ b/codex-rs/app-server/src/config_manager_service.rs
-@@ -17,6 +17,7 @@ use codex_config::ConfigLayerMetadata;
- use codex_config::ConfigLayerSource;
+@@ -18,6 +18,7 @@ use codex_config::ConfigLayerSource;
  use codex_config::ConfigLayerStack;
  use codex_config::ConfigRequirementsToml;
-+use codex_config::PROJECT_TRUST_TOML_FILE;
  use codex_config::ShellEnvironmentPolicyFilterRepresentation;
++use codex_config::TRUST_TOML_FILE;
  use codex_config::config_toml::ConfigToml;
  use codex_config::merge_toml_values;
+ use codex_config::shell_environment_filter_entry;
 @@ -236,12 +237,81 @@ impl ConfigManager {
              .edits
              .into_iter()
@@ -30,7 +30,7 @@ index 1605e37..d9c376b 100644
 +        edits: Vec<(String, JsonValue, MergeStrategy)>,
 +    ) -> Result<ConfigWriteResponse, ConfigManagerError> {
 +        let state_path =
-+            AbsolutePathBuf::from_absolute_path(self.codex_home().join(PROJECT_TRUST_TOML_FILE))
++            AbsolutePathBuf::from_absolute_path(self.codex_home().join(TRUST_TOML_FILE))
 +                .map_err(|err| ConfigManagerError::io("failed to resolve trust state path", err))?;
 +        let state_layer = create_empty_user_layer(&state_path).await?;
 +        let mut state_config = state_layer.config;
@@ -129,7 +129,7 @@ index 1605e37..d9c376b 100644
      config_toml: &AbsolutePathBuf,
  ) -> Result<ConfigLayerEntry, ConfigManagerError> {
 diff --git a/codex-rs/app-server/src/config_manager_service_tests.rs b/codex-rs/app-server/src/config_manager_service_tests.rs
-index 6ced2a7..939267b 100644
+index 6ced2a7..6853fc5 100644
 --- a/codex-rs/app-server/src/config_manager_service_tests.rs
 +++ b/codex-rs/app-server/src/config_manager_service_tests.rs
 @@ -61,6 +61,44 @@ X-Doc = "42"
@@ -166,9 +166,9 @@ index 6ced2a7..939267b 100644
 +    );
 +    assert_eq!(
 +        response.file_path.as_path(),
-+        tmp.path().join(PROJECT_TRUST_TOML_FILE)
++        tmp.path().join(TRUST_TOML_FILE)
 +    );
-+    let state = std::fs::read_to_string(tmp.path().join(PROJECT_TRUST_TOML_FILE))?;
++    let state = std::fs::read_to_string(tmp.path().join(TRUST_TOML_FILE))?;
 +    assert!(state.contains("[hooks.state"));
 +    assert!(state.contains("trusted_hash = \"sha256:trusted\""));
 +    Ok(())
@@ -178,30 +178,34 @@ index 6ced2a7..939267b 100644
  async fn write_value_preserves_comments_and_order() -> Result<()> {
      let tmp = tempdir().expect("tempdir");
 diff --git a/codex-rs/config/src/lib.rs b/codex-rs/config/src/lib.rs
-index dec1829..d26ad4e 100644
+index dec1829..9c43186 100644
 --- a/codex-rs/config/src/lib.rs
 +++ b/codex-rs/config/src/lib.rs
-@@ -34,6 +34,7 @@ mod tui_keymap;
+@@ -34,6 +34,8 @@ mod tui_keymap;
  pub mod types;
  
  pub const CONFIG_TOML_FILE: &str = "config.toml";
-+pub const PROJECT_TRUST_TOML_FILE: &str = "project-trust.toml";
++pub const TRUST_TOML_FILE: &str = "trust.toml";
++pub const LEGACY_PROJECT_TRUST_TOML_FILE: &str = "project-trust.toml";
  
  pub use auth_policy::ManagedAuthPolicy;
  pub use cloud_config_bundle::CloudConfigBundle;
 diff --git a/codex-rs/config/src/loader/mod.rs b/codex-rs/config/src/loader/mod.rs
-index 63df1ec..301debc 100644
+index 63df1ec..8970bea 100644
 --- a/codex-rs/config/src/loader/mod.rs
 +++ b/codex-rs/config/src/loader/mod.rs
-@@ -8,6 +8,7 @@ use self::layer_io::LoadedConfigLayers;
+@@ -8,8 +8,10 @@ use self::layer_io::LoadedConfigLayers;
  use crate::CONFIG_TOML_FILE;
  use crate::CloudConfigBundleLayers;
  use crate::ConfigLayerSource;
-+use crate::PROJECT_TRUST_TOML_FILE;
++use crate::LEGACY_PROJECT_TRUST_TOML_FILE;
  use crate::ProfileV2Name;
  use crate::RequirementsLayerEntry;
++use crate::TRUST_TOML_FILE;
  use crate::compose_requirements;
-@@ -45,6 +46,7 @@ use codex_utils_absolute_path::AbsolutePathBufGuard;
+ use crate::config_requirements::RequirementSource;
+ use crate::config_requirements::SandboxModeRequirement;
+@@ -45,6 +47,7 @@ use codex_utils_absolute_path::AbsolutePathBufGuard;
  use codex_utils_path_uri::PathUri;
  use dunce::canonicalize as normalize_path;
  use serde::Deserialize;
@@ -209,45 +213,83 @@ index 63df1ec..301debc 100644
  use std::io;
  use std::path::Path;
  #[cfg(windows)]
-@@ -299,6 +301,28 @@ pub async fn load_config_layers_state(
+@@ -299,12 +302,44 @@ pub async fn load_config_layers_state(
          );
      }
  
 +    // Project trust is mutable application state, so keep it out of the user's
 +    // declarative config.toml. Filter the file through the trust-only schema
 +    // before adding it to the effective configuration.
-+    let project_trust_file =
-+        AbsolutePathBuf::resolve_path_against_base(PROJECT_TRUST_TOML_FILE, codex_home);
-+    let project_trust_config: ProjectTrustConfigToml =
-+        load_config_toml_for_required_layer(fs, &project_trust_file, false, |config| {
++    let legacy_project_trust_file =
++        AbsolutePathBuf::resolve_path_against_base(LEGACY_PROJECT_TRUST_TOML_FILE, codex_home);
++    let legacy_project_trust_config: ProjectTrustConfigToml =
++        load_config_toml_for_required_layer(fs, &legacy_project_trust_file, false, |config| {
 +            ConfigLayerEntry::new(ConfigLayerSource::SessionFlags, config)
 +        })
 +        .await?
 +        .config
 +        .try_into()
 +        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
-+    let filtered_project_trust = TomlValue::try_from(project_trust_config)
++    let mut filtered_project_trust = TomlValue::try_from(legacy_project_trust_config)
 +        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
++
++    let trust_file = AbsolutePathBuf::resolve_path_against_base(TRUST_TOML_FILE, codex_home);
++    let project_trust_config: ProjectTrustConfigToml =
++        load_config_toml_for_required_layer(fs, &trust_file, false, |config| {
++            ConfigLayerEntry::new(ConfigLayerSource::SessionFlags, config)
++        })
++        .await?
++        .config
++        .try_into()
++        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
++    let current_project_trust = TomlValue::try_from(project_trust_config)
++        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
++    merge_toml_values(&mut filtered_project_trust, &current_project_trust);
 +    // This is effective runtime state, not the active user configuration.
 +    // Keeping it out of ConfigLayerSource::User ensures ordinary config writes
 +    // continue to read and update config.toml rather than this state file.
-+    let project_trust_layer =
-+        ConfigLayerEntry::new(ConfigLayerSource::SessionFlags, filtered_project_trust);
-+    layers.push(project_trust_layer);
-+
      let mut startup_warnings = None;
      if let Some(cwd) = cwd {
          let mut merged_so_far = TomlValue::Table(toml::map::Map::new());
-@@ -328,7 +352,7 @@ pub async fn load_config_layers_state(
+         for layer in &layers {
+             merge_toml_values(&mut merged_so_far, &layer.config);
+         }
++        merge_toml_values(&mut merged_so_far, &filtered_project_trust);
+         if let Some(cli_overrides_layer) = cli_overrides_layer.as_ref() {
+             merge_toml_values(&mut merged_so_far, cli_overrides_layer);
+         }
+@@ -328,7 +363,7 @@ pub async fn load_config_layers_state(
              &cwd,
              &project_root_markers,
              codex_home,
 -            &active_user_file,
-+            &project_trust_file,
++            &trust_file,
          )
          .await
          {
-@@ -849,9 +873,15 @@ struct ProjectTrustContext {
+@@ -361,13 +396,16 @@ pub async fn load_config_layers_state(
+         startup_warnings = Some(project_layers.startup_warnings);
+     }
+ 
+-    // Add a layer for runtime overrides from the CLI or UI, if any exist.
++    // Mutable trust state has session-level precedence. Combine it with CLI/UI
++    // overrides so the stack has only one SessionFlags layer, with explicit
++    // runtime overrides winning.
+     if let Some(cli_overrides_layer) = cli_overrides_layer {
+-        layers.push(ConfigLayerEntry::new(
+-            ConfigLayerSource::SessionFlags,
+-            cli_overrides_layer,
+-        ));
++        merge_toml_values(&mut filtered_project_trust, &cli_overrides_layer);
+     }
++    layers.push(ConfigLayerEntry::new(
++        ConfigLayerSource::SessionFlags,
++        filtered_project_trust,
++    ));
+ 
+     for thread_config_layer in thread_config_layers {
+         insert_layer_by_precedence(&mut layers, thread_config_layer);
+@@ -849,9 +887,15 @@ struct ProjectTrustContext {
      user_config_file: AbsolutePathBuf,
  }
  
@@ -265,13 +307,41 @@ index 63df1ec..301debc 100644
  
  struct ProjectTrustDecision {
 diff --git a/codex-rs/config/src/loader/tests.rs b/codex-rs/config/src/loader/tests.rs
-index 068e29a..763a201 100644
+index 068e29a..7ff12ba 100644
 --- a/codex-rs/config/src/loader/tests.rs
 +++ b/codex-rs/config/src/loader/tests.rs
-@@ -13,6 +13,95 @@ use tempfile::tempdir;
+@@ -13,6 +13,123 @@ use tempfile::tempdir;
  
  struct TestFileSystem;
  
++#[tokio::test]
++async fn legacy_project_trust_file_remains_readable() {
++    let tmp = tempdir().expect("tempdir");
++    let codex_home = tmp.path().join("codex-home");
++    std::fs::create_dir_all(&codex_home).expect("create codex home");
++    std::fs::write(
++        codex_home.join(crate::LEGACY_PROJECT_TRUST_TOML_FILE),
++        "[hooks.state.example]\ntrusted_hash=\"sha256:legacy\"",
++    )
++    .expect("write legacy trust state");
++
++    let stack = load_config_layers_state(
++        &TestFileSystem,
++        &codex_home,
++        None,
++        &[],
++        LoaderOverrides::without_managed_config_for_tests(),
++        &crate::NoopThreadConfigLoader,
++    )
++    .await
++    .expect("load config layers");
++
++    assert_eq!(
++        stack.effective_config()["hooks"]["state"]["example"]["trusted_hash"].as_str(),
++        Some("sha256:legacy")
++    );
++}
++
 +#[tokio::test]
 +async fn dedicated_state_file_overrides_legacy_hook_state_and_filters_other_settings() {
 +    let tmp = tempdir().expect("tempdir");
@@ -283,7 +353,7 @@ index 068e29a..763a201 100644
 +    )
 +    .expect("write user config");
 +    std::fs::write(
-+        codex_home.join(crate::PROJECT_TRUST_TOML_FILE),
++        codex_home.join(crate::TRUST_TOML_FILE),
 +        "model=\"ignored\"\n[hooks.state.example]\ntrusted_hash=\"sha256:new\"",
 +    )
 +    .expect("write mutable state");
@@ -308,7 +378,7 @@ index 068e29a..763a201 100644
 +}
 +
 +#[tokio::test]
-+async fn dedicated_project_trust_file_overrides_legacy_config() {
++async fn dedicated_trust_file_overrides_legacy_config() {
 +    let tmp = tempdir().expect("tempdir");
 +    let codex_home = tmp.path().join("codex-home");
 +    let project = tmp.path().join("project");
@@ -332,7 +402,7 @@ index 068e29a..763a201 100644
 +    )
 +    .expect("write legacy config");
 +    std::fs::write(
-+        codex_home.join(crate::PROJECT_TRUST_TOML_FILE),
++        codex_home.join(crate::TRUST_TOML_FILE),
 +        format!("[projects.{quoted_key}]\ntrust_level=\"untrusted\""),
 +    )
 +    .expect("write project trust state");
@@ -358,17 +428,40 @@ index 068e29a..763a201 100644
 +        .as_deref()
 +        .expect("disabled reason");
 +    assert!(disabled_reason.contains("marked as untrusted"));
-+    assert!(disabled_reason.contains(crate::PROJECT_TRUST_TOML_FILE));
++    assert!(disabled_reason.contains(crate::TRUST_TOML_FILE));
 +}
 +
  impl ExecutorFileSystem for TestFileSystem {
      fn canonicalize<'a>(
          &'a self,
+@@ -70,10 +187,20 @@ impl ExecutorFileSystem for TestFileSystem {
+ 
+     fn get_metadata<'a>(
+         &'a self,
+-        _path: &'a PathUri,
++        path: &'a PathUri,
+         _sandbox: Option<&'a FileSystemSandboxContext>,
+     ) -> ExecutorFileSystemFuture<'a, FileMetadata> {
+-        Box::pin(async move { unimplemented!("test filesystem only supports reads") })
++        Box::pin(async move {
++            let metadata = std::fs::symlink_metadata(path.to_abs_path()?.as_path())?;
++            Ok(FileMetadata {
++                is_directory: metadata.is_dir(),
++                is_file: metadata.is_file(),
++                is_symlink: metadata.file_type().is_symlink(),
++                size: metadata.len(),
++                created_at_ms: 0,
++                modified_at_ms: 0,
++            })
++        })
+     }
+ 
+     fn read_directory<'a>(
 diff --git a/codex-rs/core/src/config/config_tests.rs b/codex-rs/core/src/config/config_tests.rs
-index e3e91a6..100eb38 100644
+index e3e91a6..565ae93 100644
 --- a/codex-rs/core/src/config/config_tests.rs
 +++ b/codex-rs/core/src/config/config_tests.rs
-@@ -9555,6 +9555,25 @@ trust_level = "trusted"
+@@ -9555,6 +9555,21 @@ trust_level = "trusted"
      Ok(())
  }
  
@@ -380,11 +473,7 @@ index e3e91a6..100eb38 100644
 +    set_project_trust_level(codex_home.path(), project_dir, TrustLevel::Trusted)?;
 +
 +    assert!(!codex_home.path().join(CONFIG_TOML_FILE).exists());
-+    let contents = std::fs::read_to_string(
-+        codex_home
-+            .path()
-+            .join(codex_config::PROJECT_TRUST_TOML_FILE),
-+    )?;
++    let contents = std::fs::read_to_string(codex_home.path().join(codex_config::TRUST_TOML_FILE))?;
 +    assert!(contents.contains("trust_level = \"trusted\""));
 +    assert!(contents.contains(&project_trust_key(project_dir)));
 +
@@ -395,7 +484,7 @@ index e3e91a6..100eb38 100644
  fn test_set_project_trusted_converts_inline_to_explicit() -> anyhow::Result<()> {
      let project_dir = Path::new("/some/path");
 diff --git a/codex-rs/core/src/config/mod.rs b/codex-rs/core/src/config/mod.rs
-index fc3b7f5..3af9be9 100644
+index fc3b7f5..d3d3216 100644
 --- a/codex-rs/core/src/config/mod.rs
 +++ b/codex-rs/core/src/config/mod.rs
 @@ -2323,7 +2323,7 @@ pub(crate) fn set_project_trust_level_inner(
@@ -403,7 +492,7 @@ index fc3b7f5..3af9be9 100644
  }
  
 -/// Patch `CODEX_HOME/config.toml` project state to set trust level.
-+/// Patch `CODEX_HOME/project-trust.toml` project state to set trust level.
++/// Patch `CODEX_HOME/trust.toml` project state to set trust level.
  /// Use with caution.
  pub fn set_project_trust_level(
      codex_home: &Path,
@@ -412,7 +501,7 @@ index fc3b7f5..3af9be9 100644
      use crate::config::edit::ConfigEditsBuilder;
  
 -    ConfigEditsBuilder::new(codex_home)
-+    ConfigEditsBuilder::for_config_path(&codex_home.join(codex_config::PROJECT_TRUST_TOML_FILE))
++    ConfigEditsBuilder::for_config_path(&codex_home.join(codex_config::TRUST_TOML_FILE))
          .set_project_trust_level(project_path, trust_level)
          .apply_blocking()
  }
@@ -492,10 +581,10 @@ index a71f34b..033a6fa 100644
  
  pub(crate) async fn read_effective_config(
 diff --git a/codex-rs/tui/src/config_update_tests.rs b/codex-rs/tui/src/config_update_tests.rs
-index ee75088..0a783ec 100644
+index ee75088..becca21 100644
 --- a/codex-rs/tui/src/config_update_tests.rs
 +++ b/codex-rs/tui/src/config_update_tests.rs
-@@ -1,25 +1,36 @@
+@@ -1,25 +1,32 @@
  use super::*;
  use color_eyre::eyre::WrapErr;
  use pretty_assertions::assert_eq;
@@ -521,12 +610,8 @@ index ee75088..0a783ec 100644
 +            .join(codex_config::CONFIG_TOML_FILE)
 +            .exists()
      );
-+    let state = std::fs::read_to_string(
-+        codex_home
-+            .path()
-+            .join(codex_config::PROJECT_TRUST_TOML_FILE),
-+    )
-+    .expect("read project trust state");
++    let state = std::fs::read_to_string(codex_home.path().join(codex_config::TRUST_TOML_FILE))
++        .expect("read project trust state");
 +    assert!(state.contains("trust_level = \"trusted\""));
  }
  

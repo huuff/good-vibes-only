@@ -2,7 +2,7 @@
 
 The `codex-trust-state` package is a small patch over upstream Codex CLI. It
 stores project trust decisions and mutable hook state in
-`$CODEX_HOME/project-trust.toml` (normally `~/.codex/project-trust.toml`)
+`$CODEX_HOME/trust.toml` (normally `~/.codex/trust.toml`)
 instead of modifying `config.toml`.
 
 Project trust is mutable application state: Codex records it when a project is
@@ -47,8 +47,9 @@ trusted_hash = "sha256:example"
 Both `trusted` and `untrusted` decisions are stored there. Existing
 `[projects]` and `[hooks.state]` entries in `config.toml` remain supported, so
 no manual migration is required. If state appears in both files,
-`project-trust.toml` wins. New project and hook state is written only to
-`project-trust.toml`.
+`trust.toml` wins. New project and hook state is written only to `trust.toml`.
+The former `project-trust.toml` filename remains readable at lower precedence,
+so existing trust decisions continue to work without migration.
 
 The file is filtered through a state-only schema when loaded; hook definitions
 and unrelated Codex settings placed there do not become configuration.
