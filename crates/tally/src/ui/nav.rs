@@ -17,14 +17,21 @@ pub fn rail(mut page: Signal<Page>, mut overlays: Overlays) -> Element {
                 "HABITS"
             }
             button {
+                class: if page() == Page::Todos { "rail-tab on" } else { "rail-tab" },
+                onclick: move |_| page.set(Page::Todos),
+                "TODOS"
+            }
+            button {
                 class: if page() == Page::Settings { "rail-tab on" } else { "rail-tab" },
                 onclick: move |_| page.set(Page::Settings),
                 "SETTINGS"
             }
-            div { class: "rail-new",
-                button { onclick: move |_| overlays.open_add(),
-                    span { class: "plus-sign", "+" }
-                    "NEW HABIT"
+            if page() != Page::Settings {
+                div { class: "rail-new",
+                    button { onclick: move |_| if page() == Page::Todos { overlays.open_add_todo() } else { overlays.open_add() },
+                        span { class: "plus-sign", "+" }
+                        if page() == Page::Todos { "NEW TODO" } else { "NEW HABIT" }
+                    }
                 }
             }
         }
@@ -33,12 +40,12 @@ pub fn rail(mut page: Signal<Page>, mut overlays: Overlays) -> Element {
 
 pub fn bottom_bar(mut page: Signal<Page>, mut overlays: Overlays) -> Element {
     rsx! {
-        if page() == Page::Today {
+        if page() != Page::Settings {
             button {
-                class: "fab-new",
-                aria_label: "Create new habit",
-                title: "Create new habit",
-                onclick: move |_| overlays.open_add(),
+                class: if page() == Page::Todos { "fab-new todo-fab" } else { "fab-new" },
+                aria_label: if page() == Page::Todos { "Create new todo" } else { "Create new habit" },
+                title: if page() == Page::Todos { "Create new todo" } else { "Create new habit" },
+                onclick: move |_| if page() == Page::Todos { overlays.open_add_todo() } else { overlays.open_add() },
                 "+"
             }
         }
@@ -47,6 +54,11 @@ pub fn bottom_bar(mut page: Signal<Page>, mut overlays: Overlays) -> Element {
                 class: if page() == Page::Today { "bar-tab on" } else { "bar-tab" },
                 onclick: move |_| page.set(Page::Today),
                 "HABITS"
+            }
+            button {
+                class: if page() == Page::Todos { "bar-tab on" } else { "bar-tab" },
+                onclick: move |_| page.set(Page::Todos),
+                "TODOS"
             }
             button {
                 class: if page() == Page::Settings { "bar-tab on" } else { "bar-tab" },

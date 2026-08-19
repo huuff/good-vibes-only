@@ -9,6 +9,7 @@ mod schedule;
 mod settings;
 mod sheet;
 mod sidebar;
+mod todos;
 
 use chrono::NaiveDate;
 use dioxus::prelude::*;
@@ -16,6 +17,7 @@ use dioxus::prelude::*;
 use crate::clock;
 use crate::preferences::Preferences;
 use crate::store::{DEFAULT_STICKING_TARGET, Data};
+use crate::todos::TodoData;
 use schedule::ScheduleDraft;
 
 /// Tracked through the dioxus asset system (not inlined in index.html) so
@@ -54,6 +56,7 @@ pub struct Overlays {
     /// Habit whose detail sheet is open.
     pub detail: Signal<Option<u64>>,
     pub adding: Signal<bool>,
+    pub adding_todo: Signal<bool>,
     /// Calendar month shown in the detail sheet.
     pub month: Signal<NaiveDate>,
     /// Name/schedule edit mode inside the detail sheet.
@@ -65,12 +68,16 @@ pub struct Overlays {
     pub target_draft: Signal<u32>,
     /// Delete confirm armed.
     pub confirm: Signal<bool>,
+    pub todo_name: Signal<String>,
+    pub todo_date: Signal<String>,
+    pub todo_time: Signal<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Page {
     #[default]
     Today,
+    Todos,
     Settings,
 }
 
@@ -88,6 +95,14 @@ impl Overlays {
         self.sched_draft.set(ScheduleDraft::default());
         self.target_draft.set(DEFAULT_STICKING_TARGET);
         self.adding.set(true);
+        push_history_entry();
+    }
+
+    pub fn open_add_todo(&mut self) {
+        self.todo_name.set(String::new());
+        self.todo_date.set(String::new());
+        self.todo_time.set(String::new());
+        self.adding_todo.set(true);
         push_history_entry();
     }
 
@@ -111,18 +126,23 @@ fn push_history_entry() {
 
 pub fn app() -> Element {
     let data = use_signal(Data::load);
+    let todo_data = use_signal(TodoData::load);
     let preferences = use_signal(Preferences::load);
     let mut system_dark = use_signal(|| false);
     let page = use_signal(Page::default);
     let overlays = Overlays {
         detail: use_signal(|| None),
         adding: use_signal(|| false),
+        adding_todo: use_signal(|| false),
         month: use_signal(clock::today),
         editing: use_signal(|| false),
         name_draft: use_signal(String::new),
         sched_draft: use_signal(ScheduleDraft::default),
         target_draft: use_signal(|| DEFAULT_STICKING_TARGET),
         confirm: use_signal(|| false),
+        todo_name: use_signal(String::new),
+        todo_date: use_signal(String::new),
+        todo_time: use_signal(String::new),
     };
 
     // Back-gesture handling: every history pop closes the open sheet
@@ -139,6 +159,7 @@ pub fn app() -> Element {
             while pops.recv::<bool>().await.is_ok() {
                 overlays.detail.set(None);
                 overlays.adding.set(false);
+                overlays.adding_todo.set(false);
             }
         });
     });
@@ -173,10 +194,10 @@ pub fn app() -> Element {
             div { class: "shell",
                 {nav::rail(page, overlays)}
                 main { class: "main",
-                    if page() == Page::Today {
-                        {ledger::ledger(data, overlays, preferences)}
-                    } else {
-                        {settings::settings(preferences, system_dark)}
+                    match page() {
+                        Page::Today => rsx! { {ledger::ledger(data, overlays, preferences)} },
+                        Page::Todos => rsx! { {todos::todos(todo_data)} },
+                        Page::Settings => rsx! { {settings::settings(preferences, system_dark)} },
                     }
                     {nav::bottom_bar(page, overlays)}
                 }
@@ -186,6 +207,7 @@ pub fn app() -> Element {
             }
             {sheet::detail_sheet(data, overlays, preferences)}
             {sheet::add_sheet(data, overlays, preferences)}
+            {todos::add_sheet(todo_data, overlays)}
         }
     }
 }
