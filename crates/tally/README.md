@@ -25,7 +25,7 @@ Habits don't have to be daily (design turn 3, Loop Habit Tracker's
 model): a schedule is every day, every N days, N times per calendar week,
 or N times in a rolling M-day window. The week can start on Monday or Sunday
 from Settings. The Today ledger
-splits into DUE TODAY and NOT DUE TODAY, with progress lines like
+splits into DUE and COMPLETED, with progress lines like
 "1 OF 2 THIS WEEK · DUE BY SUN". Streaks generalize to consecutive
 satisfied periods (days / N-day blocks / weeks), and the current open
 period never breaks the streak — the same grace the daily streak always

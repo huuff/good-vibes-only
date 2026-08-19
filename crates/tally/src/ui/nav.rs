@@ -14,7 +14,7 @@ pub fn rail(mut page: Signal<Page>, mut overlays: Overlays) -> Element {
             button {
                 class: if page() == Page::Today { "rail-tab on" } else { "rail-tab" },
                 onclick: move |_| page.set(Page::Today),
-                "TODAY"
+                "HABITS"
             }
             button {
                 class: if page() == Page::Settings { "rail-tab on" } else { "rail-tab" },
@@ -46,7 +46,7 @@ pub fn bottom_bar(mut page: Signal<Page>, mut overlays: Overlays) -> Element {
             button {
                 class: if page() == Page::Today { "bar-tab on" } else { "bar-tab" },
                 onclick: move |_| page.set(Page::Today),
-                "TODAY"
+                "HABITS"
             }
             button {
                 class: if page() == Page::Settings { "bar-tab on" } else { "bar-tab" },
