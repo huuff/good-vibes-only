@@ -10,9 +10,10 @@ mod settings;
 mod sheet;
 mod sidebar;
 
-use chrono::{Local, NaiveDate};
+use chrono::NaiveDate;
 use dioxus::prelude::*;
 
+use crate::clock;
 use crate::preferences::Preferences;
 use crate::store::{DEFAULT_STICKING_TARGET, Data};
 use schedule::ScheduleDraft;
@@ -75,7 +76,7 @@ pub enum Page {
 
 impl Overlays {
     pub fn open_detail(&mut self, id: u64) {
-        self.month.set(Local::now().date_naive());
+        self.month.set(clock::today());
         self.editing.set(false);
         self.confirm.set(false);
         self.detail.set(Some(id));
@@ -116,7 +117,7 @@ pub fn app() -> Element {
     let overlays = Overlays {
         detail: use_signal(|| None),
         adding: use_signal(|| false),
-        month: use_signal(|| Local::now().date_naive()),
+        month: use_signal(clock::today),
         editing: use_signal(|| false),
         name_draft: use_signal(String::new),
         sched_draft: use_signal(ScheduleDraft::default),

@@ -2,7 +2,7 @@
 //! toggling inside the edit window, name/schedule editing, delete behind
 //! a two-tap confirm) and the add-habit form with its schedule picker.
 
-use chrono::{Datelike, Local, Months, NaiveDate};
+use chrono::{Datelike, Months, NaiveDate};
 use dioxus::prelude::*;
 
 use super::Overlays;
@@ -40,7 +40,7 @@ pub fn detail_sheet(
         return rsx! {};
     };
 
-    let today = Local::now().date_naive();
+    let today = crate::clock::today();
     let shown = (overlays.month)()
         .with_day(1)
         .expect("every month has a day 1");

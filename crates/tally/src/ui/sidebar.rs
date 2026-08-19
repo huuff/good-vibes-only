@@ -8,7 +8,7 @@ use crate::store::Data;
 
 pub fn sidebar(data: Signal<Data>, preferences: Signal<Preferences>) -> Element {
     let s = data().summary_with_week_start(preferences().week_start);
-    let today = chrono::Local::now().date_naive();
+    let today = crate::clock::today();
     #[allow(clippy::manual_checked_ops)]
     let pct = if s.total == 0 {
         0

@@ -7,8 +7,8 @@
 //! used to exist; the schedule line replaced it, and any stored note is
 //! now ignored (and dropped on the next save).
 
-use crate::persist;
 use crate::preferences::WeekStart;
+use crate::{clock, persist};
 use chrono::{Datelike, Days, Local, NaiveDate};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -33,7 +33,7 @@ pub const EDIT_WINDOW_DAYS: u64 = 7;
 /// Whether `day` is still within the edit window
 /// (today or up to [`EDIT_WINDOW_DAYS`] back).
 pub fn editable(day: NaiveDate) -> bool {
-    let today = Local::now().date_naive();
+    let today = clock::today();
     day <= today
         && today
             .checked_sub_days(Days::new(EDIT_WINDOW_DAYS))
@@ -130,7 +130,7 @@ impl Habit {
     }
 
     pub fn done_today(&self) -> bool {
-        self.done_on(Local::now().date_naive())
+        self.done_on(clock::today())
     }
 
     /// Check-ins in `[start, end]`, inclusive.
@@ -292,7 +292,7 @@ impl Habit {
     /// [`Self::streak_on`] as of today.
     #[cfg(test)]
     pub fn streak(&self) -> usize {
-        self.streak_on(Local::now().date_naive())
+        self.streak_on(clock::today())
     }
 
     /// The longest run of consecutive satisfied periods ever, found by
@@ -313,7 +313,7 @@ impl Habit {
 
     /// The last `n` days (oldest first), true where done.
     pub fn history(&self, n: u64) -> Vec<(NaiveDate, bool)> {
-        let today = Local::now().date_naive();
+        let today = clock::today();
         (0..n)
             .rev()
             .filter_map(|back| today.checked_sub_days(Days::new(back)))
@@ -444,7 +444,7 @@ pub struct Summary {
 impl Data {
     #[cfg(test)]
     pub fn summary(&self) -> Summary {
-        let today = Local::now().date_naive();
+        let today = clock::today();
         let days = (0..7)
             .rev()
             .filter_map(|back| today.checked_sub_days(Days::new(back)))
@@ -453,7 +453,7 @@ impl Data {
     }
 
     pub fn summary_with_week_start(&self, week_first: WeekStart) -> Summary {
-        let today = Local::now().date_naive();
+        let today = clock::today();
         let first = week_start(today, week_first);
         let days = (0..7)
             .filter_map(|ahead| first.checked_add_days(Days::new(ahead)))

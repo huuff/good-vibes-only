@@ -1,3 +1,4 @@
+mod clock;
 mod persist;
 mod preferences;
 mod store;

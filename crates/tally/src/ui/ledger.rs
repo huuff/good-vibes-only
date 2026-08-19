@@ -3,7 +3,6 @@
 //! Each row: checkbox, name + schedule/progress line, a 14-day dot strip
 //! (desktop only), and the streak numeral.
 
-use chrono::Local;
 use dioxus::prelude::*;
 
 use super::Overlays;
@@ -51,7 +50,7 @@ fn row(
     undue: bool,
     week_start: WeekStart,
 ) -> Element {
-    let today = Local::now().date_naive();
+    let today = crate::clock::today();
     let done = habit.done_today();
     let (status, accent) = habit.status_on_with_week_start(today, week_start);
     let repetitions = habit.repetitions();
@@ -71,7 +70,7 @@ fn row(
                 onclick: move |e| {
                     e.stop_propagation();
                     data.with_mut(|d| {
-                        d.toggle(habit.id, Local::now().date_naive());
+                        d.toggle(habit.id, crate::clock::today());
                         d.save();
                     });
                 },
@@ -125,8 +124,8 @@ fn row(
 pub fn ledger(data: Signal<Data>, overlays: Overlays, preferences: Signal<Preferences>) -> Element {
     let week_start = preferences().week_start;
     let summary = data().summary_with_week_start(week_start);
-    let today = Local::now().date_naive();
-    let date = Local::now().format("%a %-d %b %Y").to_string();
+    let today = crate::clock::today();
+    let date = today.format("%a %-d %b %Y").to_string();
     let pct = if summary.total == 0 {
         0.0
     } else {
