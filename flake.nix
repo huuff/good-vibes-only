@@ -285,18 +285,6 @@
                       opencode.enable = true;
                     };
                   };
-                  claude-code = {
-                    enable = true;
-                    package = null;
-                  };
-                  codex = {
-                    enable = true;
-                    package = null;
-                  };
-                  opencode = {
-                    enable = true;
-                    package = null;
-                  };
                 };
               }
             ];

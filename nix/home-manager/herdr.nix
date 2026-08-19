@@ -72,18 +72,6 @@ in
           ]);
         message = "programs.herdr.package must not be null when integrations are enabled";
       }
-      {
-        assertion = !(enabled "claude") || config.programs.claude-code.enable;
-        message = "programs.herdr.integrations.claude requires programs.claude-code.enable";
-      }
-      {
-        assertion = !(enabled "codex") || config.programs.codex.enable;
-        message = "programs.herdr.integrations.codex requires programs.codex.enable";
-      }
-      {
-        assertion = !(enabled "opencode") || config.programs.opencode.enable;
-        message = "programs.herdr.integrations.opencode requires programs.opencode.enable";
-      }
     ];
 
     programs.claude-code.settings.hooks.SessionStart = lib.mkIf (enabled "claude") (
