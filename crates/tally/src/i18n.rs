@@ -77,11 +77,6 @@ pub struct Strings {
     pub edit_name_schedule: &'static str,
     pub change_schedule: &'static str,
     pub streak_best: &'static str,
-    pub strength: &'static str,
-    pub building: &'static str,
-    pub reps: &'static str,
-    pub milestone_reached: &'static str,
-    pub milestone_default: &'static str,
     pub earlier_month: &'static str,
     pub later_month: &'static str,
     pub cal_day_toggle: &'static str,
@@ -194,13 +189,6 @@ pub static EN: Strings = Strings {
     edit_name_schedule: "Edit name and schedule",
     change_schedule: "Change schedule",
     streak_best: "Streak {} · best {}",
-    strength: "Strength {}%",
-    building: "BUILDING",
-    reps: "{} / {} REPS",
-    milestone_reached: "Milestone reached. Keep repeating it in the same context to \
-                        reinforce automaticity.",
-    milestone_default: "66 is a research-informed default, not a guarantee. \
-                        Automaticity varies by person and behavior.",
     earlier_month: "Earlier month",
     later_month: "Later month",
     cal_day_toggle: "{} — tap to toggle",
@@ -311,14 +299,6 @@ pub static ES: Strings = Strings {
     edit_name_schedule: "Editar nombre y frecuencia",
     change_schedule: "Cambiar frecuencia",
     streak_best: "Racha {} · mejor {}",
-    strength: "Fuerza {}%",
-    building: "EN CONSTRUCCIÓN",
-    reps: "{} / {} REPETICIONES",
-    milestone_reached: "Hito alcanzado. Sigue repitiéndolo en el mismo contexto \
-                        para reforzar la automaticidad.",
-    milestone_default: "66 es un valor por defecto basado en la investigación, no \
-                        una garantía. La automaticidad varía según la persona y el \
-                        comportamiento.",
     earlier_month: "Mes anterior",
     later_month: "Mes siguiente",
     cal_day_toggle: "{} — toca para cambiar",
@@ -429,14 +409,6 @@ pub static FR: Strings = Strings {
     edit_name_schedule: "Modifier le nom et la fréquence",
     change_schedule: "Changer la fréquence",
     streak_best: "Série {} · record {}",
-    strength: "Force {}%",
-    building: "EN CONSTRUCTION",
-    reps: "{} / {} RÉPÉTITIONS",
-    milestone_reached: "Palier atteint. Continuez à la répéter dans le même \
-                        contexte pour renforcer l'automatisme.",
-    milestone_default: "66 est une valeur par défaut issue de la recherche, pas \
-                        une garantie. L'automatisme varie selon la personne et le \
-                        comportement.",
     earlier_month: "Mois précédent",
     later_month: "Mois suivant",
     cal_day_toggle: "{} — touchez pour changer",
@@ -549,13 +521,6 @@ pub static DE: Strings = Strings {
     edit_name_schedule: "Name und Rhythmus bearbeiten",
     change_schedule: "Rhythmus ändern",
     streak_best: "Serie {} · Rekord {}",
-    strength: "Stärke {}%",
-    building: "IM AUFBAU",
-    reps: "{} / {} WDH.",
-    milestone_reached: "Meilenstein erreicht. Wiederhole sie weiter im gleichen \
-                        Kontext, um die Automatisierung zu festigen.",
-    milestone_default: "66 ist ein forschungsbasierter Richtwert, keine Garantie. \
-                        Die Automatisierung hängt von Person und Verhalten ab.",
     earlier_month: "Voriger Monat",
     later_month: "Nächster Monat",
     cal_day_toggle: "{} — zum Umschalten tippen",
@@ -668,14 +633,6 @@ pub static IT: Strings = Strings {
     edit_name_schedule: "Modifica nome e frequenza",
     change_schedule: "Cambia frequenza",
     streak_best: "Serie {} · record {}",
-    strength: "Forza {}%",
-    building: "IN COSTRUZIONE",
-    reps: "{} / {} RIPETIZIONI",
-    milestone_reached: "Traguardo raggiunto. Continua a ripeterla nello stesso \
-                        contesto per rafforzare l'automatismo.",
-    milestone_default: "66 è un valore predefinito basato sulla ricerca, non una \
-                        garanzia. L'automatismo varia in base alla persona e al \
-                        comportamento.",
     earlier_month: "Mese precedente",
     later_month: "Mese successivo",
     cal_day_toggle: "{} — tocca per cambiare",

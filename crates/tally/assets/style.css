@@ -972,40 +972,6 @@ button:disabled {
   margin-top: 8px;
 }
 
-.sheet-progress {
-  margin-top: 16px;
-  padding: 12px;
-  border: 1px solid var(--divider);
-  background: var(--surface);
-}
-
-.sheet-progress-copy {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  color: var(--muted);
-}
-
-.sheet-progress-copy strong {
-  color: var(--text);
-}
-
-.habit-progress.large {
-  height: 7px;
-  margin-top: 10px;
-  background: var(--bg);
-}
-
-.sheet-progress p {
-  margin-top: 9px;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--muted);
-}
-
 .form {
   display: flex;
   flex-direction: column;

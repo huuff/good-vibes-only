@@ -153,45 +153,6 @@ impl Habit {
         }
     }
 
-    /// The schedule's rolling window length in days. For strength, a
-    /// calendar week is approximated by a rolling 7 so on-track weekly
-    /// habits don't dip at week boundaries.
-    fn window_len(&self) -> u64 {
-        match self.schedule {
-            Schedule::Daily => 1,
-            Schedule::EveryNDays { n } => u64::from(n.max(1)),
-            Schedule::TimesPerWeek { .. } => 7,
-            Schedule::TimesInDays { days, .. } => u64::from(days.max(1)),
-        }
-    }
-
-    /// Habit strength: an exponential moving average, over every day from
-    /// the first check-in to `day`, of how much of the schedule's rolling
-    /// window target is met. 13-day half-life (Loop Habit Tracker's
-    /// constant): on-track days pull it toward 1, missed days decay it.
-    pub fn strength_on(&self, day: NaiveDate) -> f64 {
-        let Some(&first) = self.days.first() else {
-            return 0.0;
-        };
-        let k = 0.5f64.powf(1.0 / 13.0);
-        let target = f64::from(self.target());
-        let len = self.window_len();
-        let mut strength = 0.0;
-        let mut d = first;
-        while d <= day {
-            let start = d
-                .checked_sub_days(Days::new(len - 1))
-                .unwrap_or(NaiveDate::MIN);
-            let v = (f64::from(self.count_between(start, d)) / target).min(1.0);
-            strength = strength * k + v * (1.0 - k);
-            match d.checked_add_days(Days::new(1)) {
-                Some(next) => d = next,
-                None => break,
-            }
-        }
-        strength
-    }
-
     /// The schedule's check-in target per period.
     fn target(&self) -> u32 {
         match self.schedule {
@@ -601,28 +562,6 @@ mod tests {
     /// Mon 27 Jul – Sun 2 Aug.
     fn fri() -> NaiveDate {
         nd(2026, 7, 31)
-    }
-
-    #[test]
-    fn strength_grows_with_checkins_and_decays_on_misses() {
-        // 13 consecutive done days ending today: 1 - 0.5^(13/13) = 0.5.
-        let h = habit(&(0..13).collect::<Vec<u64>>());
-        assert!((h.strength_on(day(0)) - 0.5).abs() < 1e-9);
-        // 13 missed days after that halve it again.
-        let later = day(0) + Days::new(13);
-        assert!((h.strength_on(later) - 0.25).abs() < 1e-9);
-        // No check-ins yet: zero.
-        assert_eq!(habit(&[]).strength_on(day(0)), 0.0);
-    }
-
-    #[test]
-    fn strength_counts_on_track_flexible_schedules_as_full_days() {
-        // A weekly habit hit every 7 days is fully on track every day, so
-        // its strength matches a daily habit done daily over the same span.
-        let days: Vec<NaiveDate> = (0..4).map(|w| nd(2024, 1, 1) + Days::new(w * 7)).collect();
-        let h = on(Schedule::TimesPerWeek { times: 1 }, &days);
-        let expected = 1.0 - 0.5f64.powf(22.0 / 13.0);
-        assert!((h.strength_on(nd(2024, 1, 22)) - expected).abs() < 1e-9);
     }
 
     #[test]
