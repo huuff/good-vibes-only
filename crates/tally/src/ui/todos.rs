@@ -9,7 +9,7 @@ use crate::i18n::fill;
 use crate::preferences::Language;
 use crate::todos::{Todo, TodoData};
 
-pub fn todos(data: Signal<TodoData>, lang: Language) -> Element {
+pub fn todos(data: Signal<TodoData>, overlays: Overlays, lang: Language) -> Element {
     let t = lang.strings();
     let today = clock::today();
     let snapshot = data();
@@ -50,9 +50,9 @@ pub fn todos(data: Signal<TodoData>, lang: Language) -> Element {
                         span { {t.empty_todos_hint} }
                     }
                 } else {
-                    {todo_group(t.grp_today, due, data, today, lang)}
-                    {todo_group(t.grp_later, later, data, today, lang)}
-                    {todo_group(t.grp_anytime, anytime, data, today, lang)}
+                    {todo_group(t.grp_today, due, data, overlays, today, lang)}
+                    {todo_group(t.grp_later, later, data, overlays, today, lang)}
+                    {todo_group(t.grp_anytime, anytime, data, overlays, today, lang)}
                 }
             }
         }
@@ -62,11 +62,11 @@ pub fn todos(data: Signal<TodoData>, lang: Language) -> Element {
 fn todo_group(
     label: &'static str,
     todos: Vec<Todo>,
-    mut data: Signal<TodoData>,
+    data: Signal<TodoData>,
+    overlays: Overlays,
     today: NaiveDate,
     lang: Language,
 ) -> Element {
-    let t = lang.strings();
     if todos.is_empty() {
         return rsx! {};
     }
@@ -74,21 +74,61 @@ fn todo_group(
         section { class: "todo-group",
             h2 { class: "todo-group-label", {label} }
             for todo in todos {
-                button {
-                    key: "{todo.id}",
-                    class: if todo.done { "todo-row done" } else { "todo-row" },
-                    aria_label: if todo.done { fill(t.mark_incomplete, &[&todo.name]) } else { fill(t.mark_complete, &[&todo.name]) },
-                    onclick: move |_| { data.write().toggle(todo.id); data().save(); },
-                    span { class: if todo.done { "todo-box done" } else { "todo-box" },
-                        if todo.done {
-                            svg { view_box: "0 0 24 24", path { d: "M4 12.5l5 5L20 6.5" } }
-                        }
-                    }
-                    span { class: "todo-copy",
-                        strong { class: "todo-name", {todo.name.clone()} }
-                        if let Some(meta) = todo_meta(&todo, today, lang) { span { class: "todo-meta", {meta} } }
-                    }
+                {todo_row(todo, data, overlays, today, lang)}
+            }
+        }
+    }
+}
+
+/// One todo row: the checkbox toggles, the copy area opens the edit
+/// sheet — the same split as the habit ledger's rows.
+fn todo_row(
+    todo: Todo,
+    mut data: Signal<TodoData>,
+    mut overlays: Overlays,
+    today: NaiveDate,
+    lang: Language,
+) -> Element {
+    let t = lang.strings();
+    let id = todo.id;
+    let done = todo.done;
+    let name = todo.name.clone();
+    let meta = todo_meta(&todo, today, lang);
+    let toggle_label = if done {
+        fill(t.mark_incomplete, &[&name])
+    } else {
+        fill(t.mark_complete, &[&name])
+    };
+    let edit_title = fill(t.edit_todo, &[&name]);
+    let row_todo = todo.clone();
+    let mut row_overlays = overlays;
+    rsx! {
+        div {
+            key: "{id}",
+            class: if done { "todo-row done" } else { "todo-row" },
+            onclick: move |_| row_overlays.open_edit_todo(&row_todo),
+            button {
+                class: if done { "todo-box done" } else { "todo-box" },
+                aria_pressed: done,
+                aria_label: toggle_label,
+                onclick: move |event| {
+                    event.stop_propagation();
+                    data.write().toggle(id);
+                    data().save();
+                },
+                if done {
+                    svg { view_box: "0 0 24 24", path { d: "M4 12.5l5 5L20 6.5" } }
                 }
+            }
+            button {
+                class: "todo-copy",
+                title: edit_title,
+                onclick: move |event| {
+                    event.stop_propagation();
+                    overlays.open_edit_todo(&todo);
+                },
+                strong { class: "todo-name", {name} }
+                if let Some(meta) = meta { span { class: "todo-meta", {meta} } }
             }
         }
     }
@@ -113,8 +153,11 @@ fn todo_meta(todo: &Todo, today: NaiveDate, lang: Language) -> Option<String> {
     })
 }
 
+/// The todo form sheet: creates when opened from the FAB, edits (same
+/// form, prefilled, plus delete) when opened from a row.
 pub fn add_sheet(mut data: Signal<TodoData>, mut overlays: Overlays, lang: Language) -> Element {
-    if !(overlays.adding_todo)() {
+    let editing = (overlays.todo_edit)();
+    if !(overlays.adding_todo)() && editing.is_none() {
         return rsx! {};
     }
     let t = lang.strings();
@@ -122,7 +165,9 @@ pub fn add_sheet(mut data: Signal<TodoData>, mut overlays: Overlays, lang: Langu
     rsx! {
         div { class: "overlay", role: "presentation", onclick: move |_| overlays.dismiss(),
             section { class: "sheet todo-form-sheet", role: "dialog", aria_modal: "true", aria_labelledby: "new-todo-title", onclick: move |event| event.stop_propagation(),
-                div { class: "sheet-label", {t.new_todo_label} }
+                div { class: "sheet-label",
+                    if editing.is_some() { {t.edit_todo_label} } else { {t.new_todo_label} }
+                }
                 h2 { id: "new-todo-title", class: "sheet-name", {t.what_needs_doing} }
                 form { class: "form todo-form",
                     onsubmit: move |event| {
@@ -130,7 +175,10 @@ pub fn add_sheet(mut data: Signal<TodoData>, mut overlays: Overlays, lang: Langu
                         if valid {
                             let date = NaiveDate::parse_from_str(&(overlays.todo_date)(), "%Y-%m-%d").ok();
                             let time = NaiveTime::parse_from_str(&(overlays.todo_time)(), "%H:%M").ok();
-                            data.write().add(&(overlays.todo_name)(), date, time);
+                            match editing {
+                                Some(id) => data.write().update(id, &(overlays.todo_name)(), date, time),
+                                None => data.write().add(&(overlays.todo_name)(), date, time),
+                            }
                             data().save();
                             overlays.dismiss();
                         }
@@ -142,7 +190,32 @@ pub fn add_sheet(mut data: Signal<TodoData>, mut overlays: Overlays, lang: Langu
                         label { class: "todo-field", span { class: "field-label", {t.time_optional} } input { class: "input", r#type: "time", disabled: (overlays.todo_date)().is_empty(), value: "{overlays.todo_time}", oninput: move |event| overlays.todo_time.set(event.value()) } }
                     }
                     p { class: "todo-form-hint", {t.todo_hint} }
-                    button { class: "btn", r#type: "submit", disabled: !valid, {t.create_todo} }
+                    button { class: "btn", r#type: "submit", disabled: !valid,
+                        if editing.is_some() { {t.save} } else { {t.create_todo} }
+                    }
+                }
+                if let Some(id) = editing {
+                    div { class: "sheet-del",
+                        if (overlays.confirm)() {
+                            button {
+                                class: "btn-quiet danger",
+                                title: t.really_delete,
+                                onclick: move |_| {
+                                    overlays.dismiss();
+                                    data.write().delete(id);
+                                    data().save();
+                                },
+                                {t.sure}
+                            }
+                        } else {
+                            button {
+                                class: "btn-quiet",
+                                title: t.delete_todo_title,
+                                onclick: move |_| overlays.confirm.set(true),
+                                {t.delete_todo}
+                            }
+                        }
+                    }
                 }
             }
         }

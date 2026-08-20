@@ -675,6 +675,7 @@ button:disabled {
 .todo-row {
   width: 100%;
   min-height: 68px;
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 14px;

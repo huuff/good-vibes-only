@@ -17,7 +17,7 @@ use dioxus::prelude::*;
 use crate::clock;
 use crate::preferences::Preferences;
 use crate::store::{DEFAULT_STICKING_TARGET, Data};
-use crate::todos::TodoData;
+use crate::todos::{Todo, TodoData};
 use schedule::ScheduleDraft;
 
 /// Tracked through the dioxus asset system (not inlined in index.html) so
@@ -71,6 +71,8 @@ pub struct Overlays {
     pub todo_name: Signal<String>,
     pub todo_date: Signal<String>,
     pub todo_time: Signal<String>,
+    /// Todo whose edit sheet is open (the add form, prefilled).
+    pub todo_edit: Signal<Option<u64>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -103,6 +105,24 @@ impl Overlays {
         self.todo_date.set(String::new());
         self.todo_time.set(String::new());
         self.adding_todo.set(true);
+        push_history_entry();
+    }
+
+    /// The add form, prefilled from an existing todo, in edit mode.
+    pub fn open_edit_todo(&mut self, todo: &Todo) {
+        self.todo_name.set(todo.name.clone());
+        self.todo_date.set(
+            todo.target_date
+                .map(|d| d.format("%Y-%m-%d").to_string())
+                .unwrap_or_default(),
+        );
+        self.todo_time.set(
+            todo.target_time
+                .map(|t| t.format("%H:%M").to_string())
+                .unwrap_or_default(),
+        );
+        self.confirm.set(false);
+        self.todo_edit.set(Some(todo.id));
         push_history_entry();
     }
 
@@ -143,6 +163,7 @@ pub fn app() -> Element {
         todo_name: use_signal(String::new),
         todo_date: use_signal(String::new),
         todo_time: use_signal(String::new),
+        todo_edit: use_signal(|| None),
     };
 
     // Back-gesture handling: every history pop closes the open sheet
@@ -160,6 +181,7 @@ pub fn app() -> Element {
                 overlays.detail.set(None);
                 overlays.adding.set(false);
                 overlays.adding_todo.set(false);
+                overlays.todo_edit.set(None);
             }
         });
     });
@@ -197,7 +219,7 @@ pub fn app() -> Element {
                 main { class: "main",
                     match page() {
                         Page::Today => rsx! { {ledger::ledger(data, overlays, preferences)} },
-                        Page::Todos => rsx! { {todos::todos(todo_data, lang)} },
+                        Page::Todos => rsx! { {todos::todos(todo_data, overlays, lang)} },
                         Page::Settings => rsx! { {settings::settings(preferences, system_dark)} },
                     }
                     {nav::bottom_bar(page, overlays, lang)}

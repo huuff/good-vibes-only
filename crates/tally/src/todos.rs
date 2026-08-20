@@ -54,6 +54,30 @@ impl TodoData {
             todo.done = !todo.done;
         }
     }
+
+    /// Replace a todo's name/date/time. Empty names are rejected (like
+    /// habit renames); a time without a date is discarded (like `add`).
+    pub fn update(
+        &mut self,
+        id: u64,
+        name: &str,
+        target_date: Option<NaiveDate>,
+        target_time: Option<NaiveTime>,
+    ) {
+        let name = name.trim();
+        if name.is_empty() {
+            return;
+        }
+        if let Some(todo) = self.todos.iter_mut().find(|todo| todo.id == id) {
+            todo.name = name.to_string();
+            todo.target_date = target_date;
+            todo.target_time = target_date.and(target_time);
+        }
+    }
+
+    pub fn delete(&mut self, id: u64) {
+        self.todos.retain(|todo| todo.id != id);
+    }
 }
 
 #[cfg(test)]
@@ -73,5 +97,39 @@ mod tests {
         data.add("Send invoice", None, None);
         data.toggle(0);
         assert!(data.todos[0].done);
+    }
+
+    #[test]
+    fn update_replaces_fields_and_keeps_done() {
+        let mut data = TodoData::default();
+        let date = NaiveDate::from_ymd_opt(2026, 8, 21);
+        data.add("Send invoice", date, NaiveTime::from_hms_opt(10, 0, 0));
+        data.toggle(0);
+
+        data.update(
+            0,
+            "Send the invoice",
+            None,
+            NaiveTime::from_hms_opt(9, 0, 0),
+        );
+        let todo = &data.todos[0];
+        assert_eq!(todo.name, "Send the invoice");
+        // Clearing the date also drops the time, and done survives.
+        assert_eq!((todo.target_date, todo.target_time), (None, None));
+        assert!(todo.done);
+
+        // Empty names are rejected; unknown ids are a no-op.
+        data.update(0, "   ", date, None);
+        assert_eq!(data.todos[0].name, "Send the invoice");
+        data.update(99, "Ghost", None, None);
+        assert_eq!(data.todos.len(), 1);
+    }
+
+    #[test]
+    fn delete_removes_the_todo() {
+        let mut data = TodoData::default();
+        data.add("Send invoice", None, None);
+        data.delete(0);
+        assert!(data.todos.is_empty());
     }
 }
