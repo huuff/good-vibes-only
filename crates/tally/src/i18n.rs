@@ -77,6 +77,7 @@ pub struct Strings {
     pub edit_name_schedule: &'static str,
     pub change_schedule: &'static str,
     pub streak_best: &'static str,
+    pub strength: &'static str,
     pub building: &'static str,
     pub reps: &'static str,
     pub milestone_reached: &'static str,
@@ -189,6 +190,7 @@ pub static EN: Strings = Strings {
     edit_name_schedule: "Edit name and schedule",
     change_schedule: "Change schedule",
     streak_best: "Streak {} · best {}",
+    strength: "Strength {}%",
     building: "BUILDING",
     reps: "{} / {} REPS",
     milestone_reached: "Milestone reached. Keep repeating it in the same context to \
@@ -301,6 +303,7 @@ pub static ES: Strings = Strings {
     edit_name_schedule: "Editar nombre y frecuencia",
     change_schedule: "Cambiar frecuencia",
     streak_best: "Racha {} · mejor {}",
+    strength: "Fuerza {}%",
     building: "EN CONSTRUCCIÓN",
     reps: "{} / {} REPETICIONES",
     milestone_reached: "Hito alcanzado. Sigue repitiéndolo en el mismo contexto \
@@ -414,6 +417,7 @@ pub static FR: Strings = Strings {
     edit_name_schedule: "Modifier le nom et la fréquence",
     change_schedule: "Changer la fréquence",
     streak_best: "Série {} · record {}",
+    strength: "Force {}%",
     building: "EN CONSTRUCTION",
     reps: "{} / {} RÉPÉTITIONS",
     milestone_reached: "Palier atteint. Continuez à la répéter dans le même \
@@ -529,6 +533,7 @@ pub static DE: Strings = Strings {
     edit_name_schedule: "Name und Rhythmus bearbeiten",
     change_schedule: "Rhythmus ändern",
     streak_best: "Serie {} · Rekord {}",
+    strength: "Stärke {}%",
     building: "IM AUFBAU",
     reps: "{} / {} WDH.",
     milestone_reached: "Meilenstein erreicht. Wiederhole sie weiter im gleichen \
@@ -643,6 +648,7 @@ pub static IT: Strings = Strings {
     edit_name_schedule: "Modifica nome e frequenza",
     change_schedule: "Cambia frequenza",
     streak_best: "Serie {} · record {}",
+    strength: "Forza {}%",
     building: "IN COSTRUZIONE",
     reps: "{} / {} RIPETIZIONI",
     milestone_reached: "Traguardo raggiunto. Continua a ripeterla nello stesso \

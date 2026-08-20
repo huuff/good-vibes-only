@@ -199,6 +199,8 @@ pub fn detail_sheet(
                                 &habit.best_streak_with_week_start(week_start),
                             ],
                         )}
+                        " · "
+                        {fill(t.strength, &[&((habit.strength_on(today) * 100.0).round() as u32)])}
                     }
                     div { class: "sheet-progress",
                         div { class: "sheet-progress-copy",
