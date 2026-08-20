@@ -774,6 +774,10 @@ button:disabled {
   margin-top: 7px;
 }
 
+.todo-field:has(.input:disabled) .field-label {
+  color: color-mix(in srgb, var(--muted) 55%, transparent);
+}
+
 .todo-form-hint {
   color: var(--muted);
   font-size: 11px;
@@ -1020,6 +1024,13 @@ button:disabled {
   background: var(--surface);
   border: 1px solid var(--divider);
   border-radius: 0;
+}
+
+.input:disabled {
+  color: color-mix(in srgb, var(--text) 35%, transparent);
+  background: var(--bg);
+  border-style: dashed;
+  cursor: not-allowed;
 }
 
 .input:focus-visible {
