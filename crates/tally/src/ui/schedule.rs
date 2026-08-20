@@ -5,7 +5,8 @@
 
 use dioxus::prelude::*;
 
-use crate::preferences::WeekStart;
+use crate::i18n::{Strings, fill};
+use crate::preferences::{Language, WeekStart};
 use crate::store::Schedule;
 
 /// Which picker row is selected. Kept separate from the numbers so
@@ -76,38 +77,18 @@ impl ScheduleDraft {
         }
     }
 
-    fn hint(self, week_start: WeekStart) -> String {
-        let week_end = match week_start {
-            WeekStart::Monday => "Sunday",
-            WeekStart::Sunday => "Saturday",
+    fn hint(self, week_start: WeekStart, t: &Strings) -> String {
+        let (first, last) = match week_start {
+            WeekStart::Monday => (t.monday, t.sunday),
+            WeekStart::Sunday => (t.sunday, t.saturday),
         };
         match self.kind {
-            Kind::Daily => "Tick it off every single day.".into(),
-            Kind::EveryN => format!(
-                "One check-in every {} days, whenever suits you.",
-                self.every_n
-            ),
-            Kind::PerWeek if self.per_week == 1 => {
-                format!(
-                    "One check-in any day between {} and {} keeps the week.",
-                    week_start.label(),
-                    week_end
-                )
-            }
-            Kind::PerWeek => format!(
-                "Any {} check-ins between {} and {} count. The streak keeps \
-                 going as long as each week hits its target.",
-                self.per_week,
-                week_start.label(),
-                week_end
-            ),
-            Kind::InDays if self.times == 1 => {
-                format!("One check-in within any {} consecutive days.", self.window)
-            }
-            Kind::InDays => format!(
-                "Any {} check-ins within any {} consecutive days.",
-                self.times, self.window
-            ),
+            Kind::Daily => t.hint_daily.into(),
+            Kind::EveryN => fill(t.hint_every_n, &[&self.every_n]),
+            Kind::PerWeek if self.per_week == 1 => fill(t.hint_weekly_one, &[&first, &last]),
+            Kind::PerWeek => fill(t.hint_weekly, &[&self.per_week, &first, &last]),
+            Kind::InDays if self.times == 1 => fill(t.hint_window_one, &[&self.window]),
+            Kind::InDays => fill(t.hint_window, &[&self.times, &self.window]),
         }
     }
 }
@@ -136,12 +117,13 @@ fn num_stepper(
     value: u32,
     min: u32,
     max: u32,
+    t: &'static Strings,
     set: impl Fn(&mut ScheduleDraft, u32) + Copy + 'static,
 ) -> Element {
     rsx! {
         span { class: "num-step",
             button {
-                aria_label: "Decrease",
+                aria_label: t.decrease,
                 disabled: value <= min,
                 onclick: move |e| {
                     e.stop_propagation();
@@ -154,7 +136,7 @@ fn num_stepper(
             }
             span { class: "num-val", "{value}" }
             button {
-                aria_label: "Increase",
+                aria_label: t.increase,
                 disabled: value >= max,
                 onclick: move |e| {
                     e.stop_propagation();
@@ -196,30 +178,35 @@ fn option_row(mut draft: Signal<ScheduleDraft>, kind: Kind, label: Element) -> E
     }
 }
 
-pub fn schedule_picker(draft: Signal<ScheduleDraft>, week_start: WeekStart) -> Element {
+pub fn schedule_picker(
+    draft: Signal<ScheduleDraft>,
+    week_start: WeekStart,
+    lang: Language,
+) -> Element {
     let d = draft();
+    let t = lang.strings();
     rsx! {
-        div { class: "how-label", "HOW OFTEN?" }
-        div { class: "opts", role: "radiogroup", aria_label: "How often",
-            {option_row(draft, Kind::Daily, rsx! { "Every day" })}
+        div { class: "how-label", {t.how_often} }
+        div { class: "opts", role: "radiogroup", aria_label: t.how_often_aria,
+            {option_row(draft, Kind::Daily, rsx! { {t.every_day} })}
             {option_row(
                 draft,
                 Kind::EveryN,
                 rsx! {
-                    "Every "
-                    {num_stepper(draft, Kind::EveryN, d.every_n, 2, 90, |d, v| d.every_n = v)}
-                    " days"
+                    {t.every_prefix}
+                    {num_stepper(draft, Kind::EveryN, d.every_n, 2, 90, t, |d, v| d.every_n = v)}
+                    {t.every_suffix}
                 },
             )}
             {option_row(
                 draft,
                 Kind::PerWeek,
                 rsx! {
-                    {num_stepper(draft, Kind::PerWeek, d.per_week, 1, 7, |d, v| d.per_week = v)}
+                    {num_stepper(draft, Kind::PerWeek, d.per_week, 1, 7, t, |d, v| d.per_week = v)}
                     if d.per_week == 1 {
-                        " time per week"
+                        {t.per_week_one}
                     } else {
-                        " times per week"
+                        {t.per_week_many}
                     }
                 },
             )}
@@ -227,11 +214,11 @@ pub fn schedule_picker(draft: Signal<ScheduleDraft>, week_start: WeekStart) -> E
                 draft,
                 Kind::InDays,
                 rsx! {
-                    {num_stepper(draft, Kind::InDays, d.times, 1, d.window, |d, v| d.times = v)}
+                    {num_stepper(draft, Kind::InDays, d.times, 1, d.window, t, |d, v| d.times = v)}
                     if d.times == 1 {
-                        " time in "
+                        {t.in_days_one}
                     } else {
-                        " times in "
+                        {t.in_days_many}
                     }
                     {num_stepper(
                         draft,
@@ -239,15 +226,16 @@ pub fn schedule_picker(draft: Signal<ScheduleDraft>, week_start: WeekStart) -> E
                         d.window,
                         2,
                         90,
+                        t,
                         |d, v| {
                             d.window = v;
                             d.times = d.times.min(v);
                         },
                     )}
-                    " days"
+                    {t.in_days_suffix}
                 },
             )}
         }
-        div { class: "opt-hint", {d.hint(week_start)} }
+        div { class: "opt-hint", {d.hint(week_start, t)} }
     }
 }

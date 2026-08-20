@@ -7,7 +7,8 @@
 //! used to exist; the schedule line replaced it, and any stored note is
 //! now ignored (and dropped on the next save).
 
-use crate::preferences::WeekStart;
+use crate::i18n::fill;
+use crate::preferences::{Language, WeekStart};
 use crate::{clock, persist};
 use chrono::{Datelike, Days, Local, NaiveDate};
 use serde::{Deserialize, Serialize};
@@ -79,13 +80,14 @@ pub enum Schedule {
 impl Schedule {
     /// Short uppercase label: EVERY DAY, EVERY 3 DAYS, WEEKLY, 2×/WEEK,
     /// 2× IN 5 DAYS.
-    pub fn label(&self) -> String {
+    pub fn label(&self, lang: Language) -> String {
+        let t = lang.strings();
         match *self {
-            Schedule::Daily => "EVERY DAY".into(),
-            Schedule::EveryNDays { n } => format!("EVERY {n} DAYS"),
-            Schedule::TimesPerWeek { times: 1 } => "WEEKLY".into(),
-            Schedule::TimesPerWeek { times } => format!("{times}×/WEEK"),
-            Schedule::TimesInDays { times, days } => format!("{times}× IN {days} DAYS"),
+            Schedule::Daily => t.sched_every_day.into(),
+            Schedule::EveryNDays { n } => fill(t.sched_every_n, &[&n]),
+            Schedule::TimesPerWeek { times: 1 } => t.sched_weekly.into(),
+            Schedule::TimesPerWeek { times } => fill(t.sched_times_week, &[&times]),
+            Schedule::TimesInDays { times, days } => fill(t.sched_times_days, &[&times, &days]),
         }
     }
 }
@@ -237,21 +239,24 @@ impl Habit {
     /// in-progress flexible target).
     #[cfg(test)]
     pub fn status_on(&self, day: NaiveDate) -> (String, bool) {
-        self.status_on_with_week_start(day, WeekStart::Monday)
+        self.status_on_with_week_start(day, WeekStart::Monday, Language::English)
     }
 
     pub fn status_on_with_week_start(
         &self,
         day: NaiveDate,
         week_first: WeekStart,
+        lang: Language,
     ) -> (String, bool) {
+        let t = lang.strings();
         let next = || {
             self.next_due_with_week_start(day, week_first)
                 .map(|d| {
-                    format!(
-                        " · NEXT {}",
-                        d.format("%a %-d %b").to_string().to_uppercase()
-                    )
+                    let date = d
+                        .format_localized("%a %-d %b", lang.locale())
+                        .to_string()
+                        .to_uppercase();
+                    fill(t.status_next, &[&date])
                 })
                 .unwrap_or_default()
         };
@@ -259,35 +264,33 @@ impl Habit {
             .period_start(day, week_first)
             .map_or(0, |start| self.count_between(start, day));
         match self.schedule {
-            Schedule::Daily => ("EVERY DAY".into(), false),
+            Schedule::Daily => (t.sched_every_day.into(), false),
             Schedule::EveryNDays { .. }
                 if self.satisfied_on_with_week_start(day, week_first) && !self.done_on(day) =>
             {
-                (format!("{}{}", self.schedule.label(), next()), false)
+                (format!("{}{}", self.schedule.label(lang), next()), false)
             }
-            Schedule::EveryNDays { .. } => (self.schedule.label(), false),
+            Schedule::EveryNDays { .. } => (self.schedule.label(lang), false),
             Schedule::TimesPerWeek { times } if count >= times => (
-                format!(
-                    "{} · {count} OF {times} · TARGET MET",
-                    self.schedule.label()
+                fill(
+                    t.status_target_met,
+                    &[&self.schedule.label(lang), &count, &times],
                 ),
                 false,
             ),
             Schedule::TimesPerWeek { times } => {
                 let end = week_start(day, week_first) + Days::new(6);
-                (
-                    format!(
-                        "{count} OF {times} THIS WEEK · DUE BY {}",
-                        end.format("%a").to_string().to_uppercase()
-                    ),
-                    true,
-                )
+                let end = end
+                    .format_localized("%a", lang.locale())
+                    .to_string()
+                    .to_uppercase();
+                (fill(t.status_week, &[&count, &times, &end]), true)
             }
             Schedule::TimesInDays { times, .. } if count >= times => {
-                (format!("{}{}", self.schedule.label(), next()), false)
+                (format!("{}{}", self.schedule.label(lang), next()), false)
             }
             Schedule::TimesInDays { times, days } => {
-                (format!("{count} OF {times} IN {days} DAYS"), true)
+                (fill(t.status_window, &[&count, &times, &days]), true)
             }
         }
     }
@@ -575,7 +578,7 @@ mod tests {
         assert!(!habit.due_on_with_week_start(fri(), WeekStart::Sunday));
         let empty = on(Schedule::TimesPerWeek { times: 1 }, &[]);
         assert_eq!(
-            empty.status_on_with_week_start(fri(), WeekStart::Sunday),
+            empty.status_on_with_week_start(fri(), WeekStart::Sunday, Language::English),
             ("0 OF 1 THIS WEEK · DUE BY SAT".into(), true)
         );
     }
@@ -812,13 +815,18 @@ mod tests {
 
     #[test]
     fn schedule_labels() {
-        assert_eq!(Schedule::Daily.label(), "EVERY DAY");
-        assert_eq!(Schedule::EveryNDays { n: 3 }.label(), "EVERY 3 DAYS");
-        assert_eq!(Schedule::TimesPerWeek { times: 1 }.label(), "WEEKLY");
-        assert_eq!(Schedule::TimesPerWeek { times: 2 }.label(), "2×/WEEK");
+        let en = Language::English;
+        assert_eq!(Schedule::Daily.label(en), "EVERY DAY");
+        assert_eq!(Schedule::EveryNDays { n: 3 }.label(en), "EVERY 3 DAYS");
+        assert_eq!(Schedule::TimesPerWeek { times: 1 }.label(en), "WEEKLY");
+        assert_eq!(Schedule::TimesPerWeek { times: 2 }.label(en), "2×/WEEK");
         assert_eq!(
-            Schedule::TimesInDays { times: 2, days: 5 }.label(),
+            Schedule::TimesInDays { times: 2, days: 5 }.label(en),
             "2× IN 5 DAYS"
+        );
+        assert_eq!(
+            Schedule::EveryNDays { n: 3 }.label(Language::Spanish),
+            "CADA 3 DÍAS"
         );
     }
 

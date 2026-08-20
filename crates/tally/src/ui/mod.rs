@@ -187,19 +187,20 @@ pub fn app() -> Element {
         None => "app theme-system",
     };
 
+    let lang = preferences().language;
     rsx! {
         document::Stylesheet { href: CSS }
         document::Style { {font_faces()} }
         div { class: theme_class,
             div { class: "shell",
-                {nav::rail(page, overlays)}
+                {nav::rail(page, overlays, lang)}
                 main { class: "main",
                     match page() {
                         Page::Today => rsx! { {ledger::ledger(data, overlays, preferences)} },
-                        Page::Todos => rsx! { {todos::todos(todo_data)} },
+                        Page::Todos => rsx! { {todos::todos(todo_data, lang)} },
                         Page::Settings => rsx! { {settings::settings(preferences, system_dark)} },
                     }
-                    {nav::bottom_bar(page, overlays)}
+                    {nav::bottom_bar(page, overlays, lang)}
                 }
                 if page() == Page::Today {
                     {sidebar::sidebar(data, preferences)}
@@ -207,7 +208,7 @@ pub fn app() -> Element {
             }
             {sheet::detail_sheet(data, overlays, preferences)}
             {sheet::add_sheet(data, overlays, preferences)}
-            {todos::add_sheet(todo_data, overlays)}
+            {todos::add_sheet(todo_data, overlays, lang)}
         }
     }
 }

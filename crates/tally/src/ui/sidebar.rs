@@ -3,11 +3,14 @@
 
 use dioxus::prelude::*;
 
+use crate::i18n::fill;
 use crate::preferences::Preferences;
 use crate::store::Data;
 
 pub fn sidebar(data: Signal<Data>, preferences: Signal<Preferences>) -> Element {
     let s = data().summary_with_week_start(preferences().week_start);
+    let lang = preferences().language;
+    let t = lang.strings();
     let today = crate::clock::today();
     #[allow(clippy::manual_checked_ops)]
     let pct = if s.total == 0 {
@@ -17,17 +20,17 @@ pub fn sidebar(data: Signal<Data>, preferences: Signal<Preferences>) -> Element 
     };
     let left = s.total - s.done;
     let note = if s.total == 0 {
-        "NO HABITS YET".to_string()
+        t.no_habits_yet.to_string()
     } else if left == 0 {
-        "ALL DONE".to_string()
+        t.all_done.to_string()
     } else {
-        format!("{left} LEFT BEFORE MIDNIGHT")
+        fill(t.left_before_midnight, &[&left])
     };
 
     rsx! {
         aside { class: "side",
             div { class: "side-block",
-                div { class: "side-label", "Completion" }
+                div { class: "side-label", {t.completion} }
                 div { class: "side-pct",
                     "{pct}"
                     span { "%" }
@@ -35,7 +38,7 @@ pub fn sidebar(data: Signal<Data>, preferences: Signal<Preferences>) -> Element 
                 div { class: "side-note", "{note}" }
             }
             div { class: "side-block",
-                div { class: "side-label", "This week" }
+                div { class: "side-label", {t.this_week} }
                 div { class: "bars",
                     for (day , frac) in &s.week {
                         div {
@@ -50,13 +53,18 @@ pub fn sidebar(data: Signal<Data>, preferences: Signal<Preferences>) -> Element 
                         span {
                             key: "{day}",
                             class: if *day == today { "today" } else { "" },
-                            {day.format("%a").to_string()[..2].to_uppercase()}
+                            {day.format_localized("%a", lang.locale())
+                                .to_string()
+                                .chars()
+                                .take(2)
+                                .collect::<String>()
+                                .to_uppercase()}
                         }
                     }
                 }
             }
             div { class: "side-block",
-                div { class: "side-label", "Best streak" }
+                div { class: "side-label", {t.best_streak} }
                 if let Some((n, name)) = s.best {
                     div { class: "best",
                         span { class: "best-n", "{n}" }

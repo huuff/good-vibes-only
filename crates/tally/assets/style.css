@@ -364,6 +364,11 @@ button:disabled {
   justify-content: space-between;
 }
 
+/* Stacked preference rows share their middle border (design 8a). */
+.setting-row + .setting-row {
+  border-top: 0;
+}
+
 .week-row select {
   max-width: 12rem;
   padding: 10px 22px 10px 10px;

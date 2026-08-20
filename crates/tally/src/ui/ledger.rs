@@ -6,7 +6,8 @@
 use dioxus::prelude::*;
 
 use super::Overlays;
-use crate::preferences::{Preferences, WeekStart};
+use crate::i18n::fill;
+use crate::preferences::{Language, Preferences, WeekStart};
 use crate::store::{Data, Habit, Schedule};
 
 #[derive(Debug, PartialEq)]
@@ -49,10 +50,12 @@ fn row(
     mut overlays: Overlays,
     undue: bool,
     week_start: WeekStart,
+    lang: Language,
 ) -> Element {
+    let t = lang.strings();
     let today = crate::clock::today();
     let done = habit.done_today();
-    let (status, accent) = habit.status_on_with_week_start(today, week_start);
+    let (status, accent) = habit.status_on_with_week_start(today, week_start, lang);
     let repetitions = habit.repetitions();
     let target = habit.sticking_target.max(1);
     let progress = habit.sticking_progress() * 100.0;
@@ -65,8 +68,8 @@ fn row(
             button {
                 class: appearance.box_class,
                 aria_pressed: done,
-                aria_label: "Mark {habit.name} done today",
-                title: "Done today — tap to toggle",
+                aria_label: fill(t.mark_done, &[&habit.name]),
+                title: t.done_today_hint,
                 onclick: move |e| {
                     e.stop_propagation();
                     data.with_mut(|d| {
@@ -96,7 +99,7 @@ fn row(
                 div { class: if accent { "note accent" } else { "note" }, "{status}" }
                 div {
                     class: if habit.sticking_goal_reached() { "habit-progress reached" } else { "habit-progress" },
-                    title: "{repetitions} of {target} repetition milestone",
+                    title: fill(t.milestone_title, &[&repetitions, &target]),
                     div { style: "width:{progress:.2}%" }
                 }
             }
@@ -123,9 +126,13 @@ fn row(
 
 pub fn ledger(data: Signal<Data>, overlays: Overlays, preferences: Signal<Preferences>) -> Element {
     let week_start = preferences().week_start;
+    let lang = preferences().language;
+    let t = lang.strings();
     let summary = data().summary_with_week_start(week_start);
     let today = crate::clock::today();
-    let date = today.format("%a %-d %b %Y").to_string();
+    let date = today
+        .format_localized("%a %-d %b %Y", lang.locale())
+        .to_string();
     let pct = if summary.total == 0 {
         0.0
     } else {
@@ -140,10 +147,10 @@ pub fn ledger(data: Signal<Data>, overlays: Overlays, preferences: Signal<Prefer
             div { class: "head-row",
                 span { class: "head-date", "{date}" }
                 if let Some(n) = summary.day_number {
-                    span { class: "head-day", "DAY {n}" }
+                    span { class: "head-day", {fill(t.day_n, &[&n])} }
                 }
             }
-            h1 { class: "title", "Today" }
+            h1 { class: "title", {t.today_title} }
             div { class: "head-score",
                 span { class: "score",
                     "{summary.done}"
@@ -155,28 +162,26 @@ pub fn ledger(data: Signal<Data>, overlays: Overlays, preferences: Signal<Prefer
         if !due.is_empty() || !later.is_empty() {
             div { class: "col-head",
                 span { class: "ch-box" }
-                span { class: "ch-name", "HABIT" }
-                span { class: "ch-days", "LAST 14 DAYS" }
-                span { class: "ch-streak", "STREAK" }
+                span { class: "ch-name", {t.col_habit} }
+                span { class: "ch-days", {t.col_last14} }
+                span { class: "ch-streak", {t.col_streak} }
             }
         }
         div { class: "ledger",
             if due.is_empty() && later.is_empty() {
-                p { class: "empty",
-                    "Nothing here yet. Tap + to add a habit, then tick it off each day you do it."
-                }
+                p { class: "empty", {t.empty_ledger} }
             }
             if !later.is_empty() && !due.is_empty() {
-                div { class: "sec-head", "DUE" }
+                div { class: "sec-head", {t.sec_due} }
             }
             for habit in due {
-                {row(habit, data, overlays, false, week_start)}
+                {row(habit, data, overlays, false, week_start, lang)}
             }
             if !later.is_empty() {
-                div { class: "sec-head", "COMPLETED" }
+                div { class: "sec-head", {t.sec_completed} }
             }
             for habit in later {
-                {row(habit, data, overlays, true, week_start)}
+                {row(habit, data, overlays, true, week_start, lang)}
             }
         }
     }

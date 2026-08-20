@@ -5,9 +5,12 @@ use dioxus::prelude::*;
 
 use super::Overlays;
 use crate::clock;
+use crate::i18n::fill;
+use crate::preferences::Language;
 use crate::todos::{Todo, TodoData};
 
-pub fn todos(data: Signal<TodoData>) -> Element {
+pub fn todos(data: Signal<TodoData>, lang: Language) -> Element {
+    let t = lang.strings();
     let today = clock::today();
     let snapshot = data();
     let mut due: Vec<_> = snapshot
@@ -35,19 +38,21 @@ pub fn todos(data: Signal<TodoData>) -> Element {
     rsx! {
         section { class: "todos-screen",
             header { class: "todos-head",
-                span { class: "head-date", {today.format("%a %-d %b %Y").to_string()} }
-                h1 { class: "title", "Todos" }
+                span { class: "head-date",
+                    {today.format_localized("%a %-d %b %Y", lang.locale()).to_string()}
+                }
+                h1 { class: "title", {t.todos_title} }
             }
             div { class: "todo-list",
                 if snapshot.todos.is_empty() {
                     div { class: "empty todo-empty",
-                        strong { "Nothing on your list." }
-                        span { "Add a todo and give it a date, or leave it open-ended." }
+                        strong { {t.empty_todos} }
+                        span { {t.empty_todos_hint} }
                     }
                 } else {
-                    {todo_group("TODAY", due, data, today)}
-                    {todo_group("LATER", later, data, today)}
-                    {todo_group("ANYTIME", anytime, data, today)}
+                    {todo_group(t.grp_today, due, data, today, lang)}
+                    {todo_group(t.grp_later, later, data, today, lang)}
+                    {todo_group(t.grp_anytime, anytime, data, today, lang)}
                 }
             }
         }
@@ -59,7 +64,9 @@ fn todo_group(
     todos: Vec<Todo>,
     mut data: Signal<TodoData>,
     today: NaiveDate,
+    lang: Language,
 ) -> Element {
+    let t = lang.strings();
     if todos.is_empty() {
         return rsx! {};
     }
@@ -70,7 +77,7 @@ fn todo_group(
                 button {
                     key: "{todo.id}",
                     class: if todo.done { "todo-row done" } else { "todo-row" },
-                    aria_label: if todo.done { format!("Mark {} incomplete", todo.name) } else { format!("Mark {} complete", todo.name) },
+                    aria_label: if todo.done { fill(t.mark_incomplete, &[&todo.name]) } else { fill(t.mark_complete, &[&todo.name]) },
                     onclick: move |_| { data.write().toggle(todo.id); data().save(); },
                     span { class: if todo.done { "todo-box done" } else { "todo-box" },
                         if todo.done {
@@ -79,7 +86,7 @@ fn todo_group(
                     }
                     span { class: "todo-copy",
                         strong { class: "todo-name", {todo.name.clone()} }
-                        if let Some(meta) = todo_meta(&todo, today) { span { class: "todo-meta", {meta} } }
+                        if let Some(meta) = todo_meta(&todo, today, lang) { span { class: "todo-meta", {meta} } }
                     }
                 }
             }
@@ -87,14 +94,18 @@ fn todo_group(
     }
 }
 
-fn todo_meta(todo: &Todo, today: NaiveDate) -> Option<String> {
+fn todo_meta(todo: &Todo, today: NaiveDate, lang: Language) -> Option<String> {
     let date = todo.target_date?;
     let date_label = if date == today {
-        "TODAY".to_string()
+        lang.strings().grp_today.to_string()
     } else if date.year() == today.year() {
-        date.format("%a %-d %b").to_string().to_uppercase()
+        date.format_localized("%a %-d %b", lang.locale())
+            .to_string()
+            .to_uppercase()
     } else {
-        date.format("%a %-d %b %Y").to_string().to_uppercase()
+        date.format_localized("%a %-d %b %Y", lang.locale())
+            .to_string()
+            .to_uppercase()
     };
     Some(match todo.target_time {
         Some(time) => format!("{date_label} · {}", time.format("%H:%M")),
@@ -102,16 +113,17 @@ fn todo_meta(todo: &Todo, today: NaiveDate) -> Option<String> {
     })
 }
 
-pub fn add_sheet(mut data: Signal<TodoData>, mut overlays: Overlays) -> Element {
+pub fn add_sheet(mut data: Signal<TodoData>, mut overlays: Overlays, lang: Language) -> Element {
     if !(overlays.adding_todo)() {
         return rsx! {};
     }
+    let t = lang.strings();
     let valid = !(overlays.todo_name)().trim().is_empty();
     rsx! {
         div { class: "overlay", role: "presentation", onclick: move |_| overlays.dismiss(),
             section { class: "sheet todo-form-sheet", role: "dialog", aria_modal: "true", aria_labelledby: "new-todo-title", onclick: move |event| event.stop_propagation(),
-                div { class: "sheet-label", "New todo" }
-                h2 { id: "new-todo-title", class: "sheet-name", "What needs doing?" }
+                div { class: "sheet-label", {t.new_todo_label} }
+                h2 { id: "new-todo-title", class: "sheet-name", {t.what_needs_doing} }
                 form { class: "form todo-form",
                     onsubmit: move |event| {
                         event.prevent_default();
@@ -123,14 +135,14 @@ pub fn add_sheet(mut data: Signal<TodoData>, mut overlays: Overlays) -> Element 
                             overlays.dismiss();
                         }
                     },
-                    label { class: "field-label", r#for: "todo-name", "Todo" }
-                    input { id: "todo-name", class: "input", autofocus: true, value: "{overlays.todo_name}", placeholder: "Send project invoice", oninput: move |event| overlays.todo_name.set(event.value()) }
+                    label { class: "field-label", r#for: "todo-name", {t.todo_field} }
+                    input { id: "todo-name", class: "input", autofocus: true, value: "{overlays.todo_name}", placeholder: t.todo_placeholder, oninput: move |event| overlays.todo_name.set(event.value()) }
                     div { class: "todo-fields",
-                        label { class: "todo-field", span { class: "field-label", "Target date" } input { class: "input", r#type: "date", value: "{overlays.todo_date}", oninput: move |event| overlays.todo_date.set(event.value()) } }
-                        label { class: "todo-field", span { class: "field-label", "Time (optional)" } input { class: "input", r#type: "time", disabled: (overlays.todo_date)().is_empty(), value: "{overlays.todo_time}", oninput: move |event| overlays.todo_time.set(event.value()) } }
+                        label { class: "todo-field", span { class: "field-label", {t.target_date} } input { class: "input", r#type: "date", value: "{overlays.todo_date}", oninput: move |event| overlays.todo_date.set(event.value()) } }
+                        label { class: "todo-field", span { class: "field-label", {t.time_optional} } input { class: "input", r#type: "time", disabled: (overlays.todo_date)().is_empty(), value: "{overlays.todo_time}", oninput: move |event| overlays.todo_time.set(event.value()) } }
                     }
-                    p { class: "todo-form-hint", "Leave the date empty to keep this todo in Anytime." }
-                    button { class: "btn", r#type: "submit", disabled: !valid, "CREATE TODO" }
+                    p { class: "todo-form-hint", {t.todo_hint} }
+                    button { class: "btn", r#type: "submit", disabled: !valid, {t.create_todo} }
                 }
             }
         }

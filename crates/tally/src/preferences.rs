@@ -18,13 +18,6 @@ pub enum WeekStart {
 impl WeekStart {
     pub const ALL: [Self; 2] = [Self::Monday, Self::Sunday];
 
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Monday => "Monday",
-            Self::Sunday => "Sunday",
-        }
-    }
-
     pub const fn value(self) -> &'static str {
         match self {
             Self::Monday => "monday",
@@ -60,6 +53,63 @@ impl<'de> Deserialize<'de> for WeekStart {
     }
 }
 
+/// UI language. Options in the settings selector show their native name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum Language {
+    #[default]
+    English,
+    Spanish,
+    French,
+    German,
+    Italian,
+}
+
+impl Language {
+    pub const ALL: [Self; 5] = [
+        Self::English,
+        Self::Spanish,
+        Self::French,
+        Self::German,
+        Self::Italian,
+    ];
+
+    /// The language's own name, shown untranslated in the selector.
+    pub const fn native_name(self) -> &'static str {
+        match self {
+            Self::English => "English",
+            Self::Spanish => "Español",
+            Self::French => "Français",
+            Self::German => "Deutsch",
+            Self::Italian => "Italiano",
+        }
+    }
+
+    pub const fn value(self) -> &'static str {
+        match self {
+            Self::English => "en",
+            Self::Spanish => "es",
+            Self::French => "fr",
+            Self::German => "de",
+            Self::Italian => "it",
+        }
+    }
+
+    pub fn from_value(value: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|lang| lang.value() == value)
+    }
+
+    /// Locale for chrono's localized date formatting.
+    pub const fn locale(self) -> chrono::Locale {
+        match self {
+            Self::English => chrono::Locale::en_GB,
+            Self::Spanish => chrono::Locale::es_ES,
+            Self::French => chrono::Locale::fr_FR,
+            Self::German => chrono::Locale::de_DE,
+            Self::Italian => chrono::Locale::it_IT,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Preferences {
@@ -68,6 +118,7 @@ pub struct Preferences {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dark_mode: Option<bool>,
     pub week_start: WeekStart,
+    pub language: Language,
 }
 
 impl Preferences {

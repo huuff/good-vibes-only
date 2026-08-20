@@ -2,12 +2,13 @@
 //! toggling inside the edit window, name/schedule editing, delete behind
 //! a two-tap confirm) and the add-habit form with its schedule picker.
 
-use chrono::{Datelike, Months, NaiveDate};
+use chrono::{Datelike, Days, Months, NaiveDate};
 use dioxus::prelude::*;
 
 use super::Overlays;
 use super::schedule::{ScheduleDraft, schedule_picker};
-use crate::preferences::{Preferences, WeekStart};
+use crate::i18n::{Strings, fill};
+use crate::preferences::{Language, Preferences, WeekStart};
 use crate::store::{Data, editable};
 
 /// The days of the month containing `month`, padded for the configured
@@ -75,10 +76,23 @@ pub fn detail_sheet(
     };
 
     let week_start = preferences().week_start;
-    let weekday_labels = match week_start {
-        WeekStart::Monday => ["M", "T", "W", "T", "F", "S", "S"],
-        WeekStart::Sunday => ["S", "M", "T", "W", "T", "F", "S"],
-    };
+    let lang = preferences().language;
+    let t = lang.strings();
+    // First letter of each localized weekday name, starting from the
+    // configured first day. The anchor is just any known Monday.
+    let monday_anchor = NaiveDate::from_ymd_opt(2026, 1, 5).expect("valid date");
+    let offset = u64::from(week_start.weekday().num_days_from_monday());
+    let weekday_labels: Vec<String> = (0..7)
+        .map(|i| {
+            (monday_anchor + Days::new(offset + i))
+                .format_localized("%a", lang.locale())
+                .to_string()
+                .chars()
+                .next()
+                .map(|c| c.to_uppercase().to_string())
+                .unwrap_or_default()
+        })
+        .collect();
     let day_cells: Vec<Element> = month_cells(shown, week_start)
         .into_iter()
         .map(|cell| {
@@ -104,7 +118,7 @@ pub fn detail_sheet(
                 button {
                     class: "{cls}",
                     disabled: day > today,
-                    title: if editable(day) { "{day} — tap to toggle" } else { "{day}" },
+                    title: if editable(day) { fill(t.cal_day_toggle, &[&day]) } else { day.to_string() },
                     onclick: move |_| {
                         if editable(day) {
                             data.with_mut(|d| {
@@ -135,7 +149,7 @@ pub fn detail_sheet(
                         overlays.dismiss();
                     }
                 },
-                div { class: "sheet-label", "Habit" }
+                div { class: "sheet-label", {t.habit_label} }
                 if (overlays.editing)() {
                     div { class: "form",
                         input {
@@ -155,44 +169,52 @@ pub fn detail_sheet(
                                 }
                             },
                         }
-                        {schedule_picker(overlays.sched_draft, week_start)}
-                        {target_picker(overlays.target_draft)}
+                        {schedule_picker(overlays.sched_draft, week_start, lang)}
+                        {target_picker(overlays.target_draft, lang)}
                         button {
                             class: "btn",
                             disabled: (overlays.name_draft)().trim().is_empty(),
                             onclick: move |_| save(),
-                            "SAVE"
+                            {t.save}
                         }
                     }
                 } else {
                     button {
                         class: "sheet-name",
-                        title: "Edit name and schedule",
+                        title: t.edit_name_schedule,
                         onclick: move |_| start_edit(),
                         "{habit.name} ✎"
                     }
                     button {
                         class: "sheet-sched",
-                        title: "Change schedule",
+                        title: t.change_schedule,
                         onclick: move |_| start_edit2(),
-                        "{habit.schedule.label()} ✎"
+                        "{habit.schedule.label(lang)} ✎"
                     }
                     div { class: "sheet-stats",
-                        "Streak {habit.streak_on_with_week_start(today, week_start)} · best {habit.best_streak_with_week_start(week_start)}"
+                        {fill(
+                            t.streak_best,
+                            &[
+                                &habit.streak_on_with_week_start(today, week_start),
+                                &habit.best_streak_with_week_start(week_start),
+                            ],
+                        )}
                     }
                     div { class: "sheet-progress",
                         div { class: "sheet-progress-copy",
-                            span { "BUILDING" }
-                            strong { "{habit.repetitions()} / {habit.sticking_target.max(1)} REPS" }
+                            span { {t.building} }
+                            strong {
+                                {fill(t.reps, &[&habit.repetitions(), &habit.sticking_target.max(1)])}
+                            }
                         }
                         div { class: "habit-progress large",
                             div { style: "width:{habit.sticking_progress() * 100.0:.2}%" }
                         }
                         p {
                             if habit.sticking_goal_reached() {
-                                "Milestone reached. Keep repeating it in the same context to reinforce automaticity."
+                                {t.milestone_reached}
                             } else {
-                                "66 is a research-informed default, not a guarantee. Automaticity varies by person and behavior."
+                                {t.milestone_default}
                             }
                         }
                     }
@@ -200,14 +222,16 @@ pub fn detail_sheet(
                 div { class: "cal-nav",
                     button {
                         class: "btn-quiet",
-                        title: "Earlier month",
+                        title: t.earlier_month,
                         onclick: move |_| overlays.month.set(shown - Months::new(1)),
                         "‹"
                     }
-                    span { class: "cal-title", {shown.format("%B %Y").to_string()} }
+                    span { class: "cal-title",
+                        {shown.format_localized("%B %Y", lang.locale()).to_string()}
+                    }
                     button {
                         class: "btn-quiet",
-                        title: "Later month",
+                        title: t.later_month,
                         disabled: shown >= this_month,
                         onclick: move |_| overlays.month.set(shown + Months::new(1)),
                         "›"
@@ -223,7 +247,7 @@ pub fn detail_sheet(
                     if (overlays.confirm)() {
                         button {
                             class: "btn-quiet danger",
-                            title: "Really delete",
+                            title: t.really_delete,
                             onclick: move |_| {
                                 overlays.dismiss();
                                 data.with_mut(|d| {
@@ -231,14 +255,14 @@ pub fn detail_sheet(
                                     d.save();
                                 });
                             },
-                            "SURE?"
+                            {t.sure}
                         }
                     } else {
                         button {
                             class: "btn-quiet",
-                            title: "Delete habit",
+                            title: t.delete_habit_title,
                             onclick: move |_| overlays.confirm.set(true),
-                            "DELETE HABIT"
+                            {t.delete_habit}
                         }
                     }
                 }
@@ -255,6 +279,8 @@ pub fn add_sheet(
     if !(overlays.adding)() {
         return rsx! {};
     }
+    let lang = preferences().language;
+    let t = lang.strings();
 
     let mut add = move || {
         let name = (overlays.name_draft)();
@@ -288,12 +314,12 @@ pub fn add_sheet(
                         overlays.dismiss();
                     }
                 },
-                div { class: "sheet-label", "New habit" }
+                div { class: "sheet-label", {t.new_habit_label} }
                 div { class: "form",
                     input {
                         class: "input",
                         value: "{overlays.name_draft}",
-                        placeholder: "Name it…",
+                        placeholder: t.name_placeholder,
                         enterkeyhint: "done",
                         onmounted: move |e| async move {
                             let _ = e.data().set_focus(true).await;
@@ -308,13 +334,13 @@ pub fn add_sheet(
                             }
                         },
                     }
-                    {schedule_picker(overlays.sched_draft, preferences().week_start)}
-                    {target_picker(overlays.target_draft)}
+                    {schedule_picker(overlays.sched_draft, preferences().week_start, lang)}
+                    {target_picker(overlays.target_draft, lang)}
                     button {
                         class: "btn",
                         disabled: (overlays.name_draft)().trim().is_empty(),
                         onclick: move |_| add(),
-                        "CREATE HABIT"
+                        {t.create_habit}
                     }
                 }
             }
@@ -322,17 +348,18 @@ pub fn add_sheet(
     }
 }
 
-fn target_picker(mut target: Signal<u32>) -> Element {
+fn target_picker(mut target: Signal<u32>, lang: Language) -> Element {
+    let t: &'static Strings = lang.strings();
     rsx! {
         div { class: "target-picker",
             div { class: "target-copy",
-                span { class: "how-label", "STICKING MILESTONE" }
-                span { class: "target-hint", "Completed repetitions · editable · 66 suggested" }
+                span { class: "how-label", {t.sticking_milestone} }
+                span { class: "target-hint", {t.target_hint} }
             }
             div { class: "num-step target-step",
                 button {
                     type: "button",
-                    aria_label: "Decrease repetition milestone",
+                    aria_label: t.decrease_milestone,
                     disabled: target() <= 1,
                     onclick: move |_| target.with_mut(|n| *n = n.saturating_sub(1).max(1)),
                     "−"
@@ -340,7 +367,7 @@ fn target_picker(mut target: Signal<u32>) -> Element {
                 span { class: "num-val", "{target}" }
                 button {
                     type: "button",
-                    aria_label: "Increase repetition milestone",
+                    aria_label: t.increase_milestone,
                     onclick: move |_| target.with_mut(|n| *n = n.saturating_add(1).min(999)),
                     "+"
                 }

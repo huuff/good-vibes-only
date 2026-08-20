@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde", "unstable-locales"] }
 dioxus = { version = "0.7" }
 serde = { version = "1", features = ["derive"] }
 
