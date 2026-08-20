@@ -172,15 +172,18 @@ impl Habit {
     }
 
     /// Whether the habit belongs in the DUE list on `day`: its period
-    /// target isn't met yet, or it was checked off that very day (a
-    /// just-done habit stays in the due list, checked).
+    /// target isn't met yet when today's check-in is set aside (a
+    /// just-done habit stays in the due list, checked, but an extra
+    /// tick on an already-met target stays in COMPLETED).
     #[cfg(test)]
     pub fn due_on(&self, day: NaiveDate) -> bool {
         self.due_on_with_week_start(day, WeekStart::Monday)
     }
 
     pub fn due_on_with_week_start(&self, day: NaiveDate, week_first: WeekStart) -> bool {
-        self.done_on(day) || !self.satisfied_on_with_week_start(day, week_first)
+        self.period_start(day, week_first).is_none_or(|start| {
+            self.count_between(start, day) - u32::from(self.done_on(day)) < self.target()
+        })
     }
 
     /// The first day after `day` on which the habit becomes due again,
@@ -874,6 +877,16 @@ mod tests {
         assert!(!on(twice, &[nd(2026, 7, 27), nd(2026, 7, 29)]).due_on(fri()));
         // Last week's check-ins don't count toward this week.
         assert!(on(twice, &[nd(2026, 7, 25), nd(2026, 7, 26)]).due_on(fri()));
+    }
+
+    #[test]
+    fn extra_checkin_on_a_met_weekly_target_stays_completed() {
+        let weekly = Schedule::TimesPerWeek { times: 1 };
+        // Target already met on Monday; an extra tick on Friday must not
+        // pull the habit back into the DUE list.
+        assert!(!on(weekly, &[nd(2026, 7, 27), fri()]).due_on(fri()));
+        // But the check-in that met the target keeps it listed as due.
+        assert!(on(weekly, &[fri()]).due_on(fri()));
     }
 
     #[test]
