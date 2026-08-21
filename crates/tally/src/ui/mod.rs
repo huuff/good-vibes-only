@@ -17,7 +17,7 @@ use dioxus::prelude::*;
 
 use crate::clock;
 use crate::preferences::Preferences;
-use crate::rewards::RewardData;
+use crate::rewards::{Reward, RewardData};
 use crate::store::{DEFAULT_STICKING_TARGET, Data};
 use crate::todos::{Difficulty, Todo, TodoData};
 use schedule::ScheduleDraft;
@@ -79,6 +79,8 @@ pub struct Overlays {
     pub adding_reward: Signal<bool>,
     pub reward_name: Signal<String>,
     pub reward_cost: Signal<String>,
+    /// Reward whose edit sheet is open (the add form, prefilled).
+    pub reward_edit: Signal<Option<u64>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -120,6 +122,15 @@ impl Overlays {
         self.reward_name.set(String::new());
         self.reward_cost.set(String::new());
         self.adding_reward.set(true);
+        push_history_entry();
+    }
+
+    /// The add form, prefilled from an existing reward, in edit mode.
+    pub fn open_edit_reward(&mut self, reward: &Reward) {
+        self.reward_name.set(reward.name.clone());
+        self.reward_cost.set(reward.cost.to_string());
+        self.confirm.set(false);
+        self.reward_edit.set(Some(reward.id));
         push_history_entry();
     }
 
@@ -185,6 +196,7 @@ pub fn app() -> Element {
         adding_reward: use_signal(|| false),
         reward_name: use_signal(String::new),
         reward_cost: use_signal(String::new),
+        reward_edit: use_signal(|| None),
     };
 
     // Back-gesture handling: every history pop closes the open sheet
@@ -204,6 +216,7 @@ pub fn app() -> Element {
                 overlays.adding_todo.set(false);
                 overlays.todo_edit.set(None);
                 overlays.adding_reward.set(false);
+                overlays.reward_edit.set(None);
             }
         });
     });
@@ -243,7 +256,7 @@ pub fn app() -> Element {
                     match page() {
                         Page::Today => rsx! { {ledger::ledger(data, overlays, preferences)} },
                         Page::Todos => rsx! { {todos::todos(todo_data, overlays, lang)} },
-                        Page::Rewards => rsx! { {rewards::rewards(reward_data, data, todo_data, lang)} },
+                        Page::Rewards => rsx! { {rewards::rewards(reward_data, data, todo_data, overlays, lang)} },
                         Page::Settings => rsx! { {settings::settings(preferences, system_dark)} },
                     }
                     {nav::bottom_bar(page, overlays, lang, rewards_on)}

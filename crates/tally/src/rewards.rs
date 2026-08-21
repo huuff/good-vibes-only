@@ -72,6 +72,24 @@ impl RewardData {
         self.next_id += 1;
     }
 
+    /// Replace a reward's name and cost. Empty names and zero costs are
+    /// rejected, like `add`.
+    pub fn update(&mut self, id: u64, name: &str, cost: u32) {
+        let name = name.trim();
+        if name.is_empty() || cost == 0 {
+            return;
+        }
+        if let Some(reward) = self.rewards.iter_mut().find(|reward| reward.id == id) {
+            reward.name = name.to_string();
+            reward.cost = cost;
+        }
+    }
+
+    /// Remove a reward. Past redemptions stay spent.
+    pub fn delete(&mut self, id: u64) {
+        self.rewards.retain(|reward| reward.id != id);
+    }
+
     /// Spend a reward's cost. A no-op when the balance can't cover it, so
     /// a stale click on a just-unaffordable button can't go negative.
     pub fn redeem(&mut self, id: u64, earned: u64) {
@@ -133,6 +151,25 @@ mod tests {
         data.redeem(0, 50);
         // The done todo backing those points was deleted afterwards.
         assert_eq!(data.balance(10), 0);
+    }
+
+    #[test]
+    fn update_and_delete_edit_the_list_but_not_spent_points() {
+        let mut data = RewardData::default();
+        data.add("Cake", 50);
+        data.redeem(0, 100);
+
+        data.update(0, "Bigger cake", 80);
+        assert_eq!(
+            (data.rewards[0].name.as_str(), data.rewards[0].cost),
+            ("Bigger cake", 80)
+        );
+        data.update(0, " ", 90); // rejected, like add
+        assert_eq!(data.rewards[0].cost, 80);
+
+        data.delete(0);
+        assert!(data.rewards.is_empty());
+        assert_eq!(data.balance(100), 50); // the redeemed 50 stays spent
     }
 
     #[test]

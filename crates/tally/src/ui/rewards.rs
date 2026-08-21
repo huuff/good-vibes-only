@@ -15,6 +15,7 @@ pub fn rewards(
     mut data: Signal<RewardData>,
     habit_data: Signal<Data>,
     todo_data: Signal<TodoData>,
+    overlays: Overlays,
     lang: Language,
 ) -> Element {
     let t = lang.strings();
@@ -52,10 +53,24 @@ pub fn rewards(
                             } else {
                                 fill(t.redeem_insufficient, &[&reward.name])
                             };
+                            let edit_title = fill(t.edit_reward, &[&reward.name]);
                             let id = reward.id;
+                            let row_reward = reward.clone();
+                            let mut row_overlays = overlays;
+                            let mut copy_overlays = overlays;
+                            let copy_reward = reward.clone();
                             rsx! {
-                                div { key: "{id}", class: "reward-row",
-                                    div { class: "todo-copy",
+                                div {
+                                    key: "{id}",
+                                    class: "reward-row",
+                                    onclick: move |_| row_overlays.open_edit_reward(&row_reward),
+                                    button {
+                                        class: "todo-copy",
+                                        title: edit_title,
+                                        onclick: move |event| {
+                                            event.stop_propagation();
+                                            copy_overlays.open_edit_reward(&copy_reward);
+                                        },
                                         strong { class: "todo-name", {reward.name.clone()} }
                                         span { class: "todo-meta", {fill(t.cost_points, &[&reward.cost])} }
                                     }
@@ -64,7 +79,8 @@ pub fn rewards(
                                         disabled: !affordable,
                                         aria_label: label.clone(),
                                         title: label,
-                                        onclick: move |_| {
+                                        onclick: move |event| {
+                                            event.stop_propagation();
                                             let earned = rewards::earned(&habit_data(), &todo_data());
                                             data.write().redeem(id, earned);
                                             data().save();
@@ -81,9 +97,11 @@ pub fn rewards(
     }
 }
 
-/// The new-reward sheet: a name and its cost in points.
+/// The reward form sheet: creates when opened from the FAB, edits (same
+/// form, prefilled, plus delete) when opened from a row.
 pub fn add_sheet(mut data: Signal<RewardData>, mut overlays: Overlays, lang: Language) -> Element {
-    if !(overlays.adding_reward)() {
+    let editing = (overlays.reward_edit)();
+    if !(overlays.adding_reward)() && editing.is_none() {
         return rsx! {};
     }
     let t = lang.strings();
@@ -92,13 +110,18 @@ pub fn add_sheet(mut data: Signal<RewardData>, mut overlays: Overlays, lang: Lan
     rsx! {
         div { class: "overlay", role: "presentation", onclick: move |_| overlays.dismiss(),
             section { class: "sheet", role: "dialog", aria_modal: "true", aria_labelledby: "new-reward-title", onclick: move |event| event.stop_propagation(),
-                div { class: "sheet-label", {t.new_reward_label} }
+                div { class: "sheet-label",
+                    if editing.is_some() { {t.edit_reward_label} } else { {t.new_reward_label} }
+                }
                 h2 { id: "new-reward-title", class: "sheet-name", {t.what_reward} }
                 form { class: "form todo-form",
                     onsubmit: move |event| {
                         event.prevent_default();
                         if valid {
-                            data.write().add(&(overlays.reward_name)(), cost);
+                            match editing {
+                                Some(id) => data.write().update(id, &(overlays.reward_name)(), cost),
+                                None => data.write().add(&(overlays.reward_name)(), cost),
+                            }
                             data().save();
                             overlays.dismiss();
                         }
@@ -111,7 +134,32 @@ pub fn add_sheet(mut data: Signal<RewardData>, mut overlays: Overlays, lang: Lan
                         span { {t.points_label} }
                     }
                     p { class: "todo-form-hint", {t.reward_hint} }
-                    button { class: "btn", r#type: "submit", disabled: !valid, {t.create_reward} }
+                    button { class: "btn", r#type: "submit", disabled: !valid,
+                        if editing.is_some() { {t.save} } else { {t.create_reward} }
+                    }
+                }
+                if let Some(id) = editing {
+                    div { class: "sheet-del",
+                        if (overlays.confirm)() {
+                            button {
+                                class: "btn-quiet danger",
+                                title: t.really_delete,
+                                onclick: move |_| {
+                                    overlays.dismiss();
+                                    data.write().delete(id);
+                                    data().save();
+                                },
+                                {t.sure}
+                            }
+                        } else {
+                            button {
+                                class: "btn-quiet",
+                                title: t.delete_reward_title,
+                                onclick: move |_| overlays.confirm.set(true),
+                                {t.delete_reward}
+                            }
+                        }
+                    }
                 }
             }
         }
