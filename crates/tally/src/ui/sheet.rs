@@ -34,6 +34,8 @@ pub fn detail_sheet(
     mut overlays: Overlays,
     preferences: Signal<Preferences>,
 ) -> Element {
+    // Hook, so it must run before the early returns below.
+    let mut strength_year = use_signal(|| false);
     let Some(id) = (overlays.detail)() else {
         return rsx! {};
     };
@@ -78,6 +80,36 @@ pub fn detail_sheet(
     let week_start = preferences().week_start;
     let lang = preferences().language;
     let t = lang.strings();
+
+    // Strength chart (design 13a): 12 samples, weekly or ~monthly.
+    let year = strength_year();
+    let series = habit.strength_series(12, if year { 30 } else { 7 }, week_start);
+    let span = (series.len().saturating_sub(1)).max(1) as f64;
+    let point = |i: usize, s: f64| (i as f64 / span * 360.0, 200.0 - s * 180.0);
+    let line_path: String = series
+        .iter()
+        .enumerate()
+        .map(|(i, &(_, s))| {
+            let (x, y) = point(i, s);
+            format!("{}{x:.1} {y:.1} ", if i == 0 { "M" } else { "L" })
+        })
+        .collect();
+    let area_path = format!("{line_path}L360 200 L0 200 Z");
+    let last_val = series.last().map_or(0.0, |&(_, s)| s);
+    let (end_x, end_y) = point(series.len().saturating_sub(1), last_val);
+    let pct = (last_val * 100.0).round() as u32;
+    let months: Vec<(f64, String)> = [0usize, 4, 8]
+        .iter()
+        .filter_map(|&i| series.get(i).map(|&(d, _)| (i, d)))
+        .map(|(i, d)| {
+            (
+                i as f64 / span * 360.0,
+                d.format_localized("%b", lang.locale())
+                    .to_string()
+                    .to_uppercase(),
+            )
+        })
+        .collect();
     // First letter of each localized weekday name, starting from the
     // configured first day. The anchor is just any known Monday.
     let monday_anchor = NaiveDate::from_ymd_opt(2026, 1, 5).expect("valid date");
@@ -199,6 +231,60 @@ pub fn detail_sheet(
                                 &habit.best_streak_with_week_start(week_start),
                             ],
                         )}
+                    }
+                }
+                section { class: "strength",
+                    div { class: "strength-head",
+                        div {
+                            div { class: "strength-title", {t.habit_strength} }
+                            div { class: "strength-sub",
+                                if year {
+                                    {t.strength_1y}
+                                } else {
+                                    {t.strength_12w}
+                                }
+                            }
+                        }
+                        div { class: "range-toggle",
+                            button {
+                                class: if !year { "on" } else { "" },
+                                onclick: move |_| strength_year.set(false),
+                                {t.range_12w}
+                            }
+                            button {
+                                class: if year { "on" } else { "" },
+                                onclick: move |_| strength_year.set(true),
+                                {t.range_1y}
+                            }
+                        }
+                    }
+                    svg {
+                        class: "strength-chart",
+                        view_box: "0 0 360 220",
+                        role: "img",
+                        "aria-label": t.habit_strength,
+                        for gy in [20, 80, 140, 200] {
+                            line {
+                                class: "grid",
+                                x1: "0",
+                                y1: "{gy}",
+                                x2: "360",
+                                y2: "{gy}",
+                            }
+                        }
+                        path { class: "area", d: "{area_path}" }
+                        path { class: "line", d: "{line_path}" }
+                        circle { class: "dot", cx: "{end_x:.1}", cy: "{end_y:.1}", r: "6" }
+                        text {
+                            class: "val",
+                            x: "{end_x - 6.0:.1}",
+                            y: "{(end_y - 14.0).max(12.0):.1}",
+                            text_anchor: "end",
+                            "{pct}"
+                        }
+                        for (mx , label) in months {
+                            text { class: "axis", x: "{mx:.1}", y: "216", "{label}" }
+                        }
                     }
                 }
                 div { class: "cal-nav",

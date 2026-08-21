@@ -317,6 +317,59 @@ impl Habit {
             .unwrap_or(0)
     }
 
+    /// Habit strength for the detail chart (Loop Habit Tracker's model):
+    /// an exponential moving average of daily satisfaction whose decay is
+    /// scaled by the schedule's expected frequency, so a weekly habit
+    /// builds as fast as a daily one. `points` samples `step` days apart
+    /// ending today, oldest first, each in `0..=1`.
+    pub fn strength_series(
+        &self,
+        points: usize,
+        step: u64,
+        week_first: WeekStart,
+    ) -> Vec<(NaiveDate, f64)> {
+        let today = clock::today();
+        let mut out: Vec<(NaiveDate, f64)> = (0..points as u64)
+            .rev()
+            .filter_map(|back| today.checked_sub_days(Days::new(step * back)))
+            .map(|day| (day, 0.0))
+            .collect();
+        let Some(&first) = self.days.first() else {
+            return out;
+        };
+        let freq = match self.schedule {
+            Schedule::Daily => 1.0,
+            Schedule::EveryNDays { n } => 1.0 / f64::from(n.max(1)),
+            Schedule::TimesPerWeek { times } => f64::from(times.max(1)) / 7.0,
+            Schedule::TimesInDays { times, days } => {
+                f64::from(times.max(1)) / f64::from(days.max(1))
+            }
+        };
+        // Loop's constant: strength halves after ~13 missed repetitions.
+        let keep = 0.5_f64.powf(freq.sqrt() / 13.0);
+        let mut strength = 0.0;
+        let mut next = out
+            .iter()
+            .position(|&(d, _)| d >= first)
+            .unwrap_or(out.len());
+        let mut day = first;
+        while day <= today {
+            strength *= keep;
+            if self.satisfied_on_with_week_start(day, week_first) {
+                strength += 1.0 - keep;
+            }
+            while next < out.len() && out[next].0 == day {
+                out[next].1 = strength;
+                next += 1;
+            }
+            match day.succ_opt() {
+                Some(d) => day = d,
+                None => break,
+            }
+        }
+        out
+    }
+
     /// The last `n` days (oldest first), true where done.
     pub fn history(&self, n: u64) -> Vec<(NaiveDate, bool)> {
         let today = clock::today();
@@ -618,6 +671,25 @@ mod tests {
         assert_eq!(hist[0], (day(13), true));
         assert_eq!(hist[13], (day(0), true));
         assert!(hist[1..13].iter().all(|&(_, done)| !done));
+    }
+
+    #[test]
+    fn strength_rises_with_checkins_and_is_zero_without() {
+        let series = habit(&[]).strength_series(12, 7, WeekStart::Monday);
+        assert_eq!(series.len(), 12);
+        assert!(series.iter().all(|&(_, s)| s == 0.0));
+
+        // A perfect 84-day daily run: samples rise monotonically toward 1.
+        let h = habit(&(0..84).collect::<Vec<_>>());
+        let series = h.strength_series(12, 7, WeekStart::Monday);
+        assert_eq!(series.last().unwrap().0, day(0));
+        assert!(series.windows(2).all(|w| w[0].1 < w[1].1));
+        assert!(series.last().unwrap().1 > 0.9);
+        // Samples predating the first check-in stay at zero.
+        let young = habit(&[0, 1, 2]);
+        let series = young.strength_series(12, 7, WeekStart::Monday);
+        assert_eq!(series[0].1, 0.0);
+        assert!(series.last().unwrap().1 > 0.0);
     }
 
     #[test]

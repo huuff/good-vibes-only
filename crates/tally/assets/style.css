@@ -1306,6 +1306,96 @@ button:disabled {
   min-width: 42px;
 }
 
+/* --- habit strength chart (design 13a) ---------------------------------- */
+
+.strength {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--divider);
+}
+
+.strength-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.strength-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.strength-sub {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.range-toggle {
+  display: flex;
+  border: 1px solid var(--divider);
+}
+
+.range-toggle button {
+  padding: 8px 10px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.range-toggle button.on {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.strength-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 12px;
+  overflow: visible;
+}
+
+.strength-chart .grid {
+  stroke: var(--divider);
+}
+
+.strength-chart .area {
+  fill: var(--accent);
+  fill-opacity: 0.16;
+}
+
+.strength-chart .line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+
+.strength-chart .dot {
+  fill: var(--bg);
+  stroke: var(--accent);
+  stroke-width: 4;
+}
+
+.strength-chart .val {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.strength-chart .axis {
+  fill: var(--muted);
+  font-size: 10px;
+}
+
 /* --- sheet calendar ---------------------------------------------------- */
 
 .cal-nav {
