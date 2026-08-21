@@ -87,6 +87,24 @@ pub fn settings(mut preferences: Signal<Preferences>, system_dark: Signal<bool>)
                         }
                     }
                 }
+                div { class: "setting-row",
+                    div { class: "setting-copy",
+                        strong { {t.enable_rewards} }
+                        span {
+                            if current.rewards_enabled { {t.rewards_on_hint} } else { {t.rewards_off_hint} }
+                        }
+                    }
+                    button {
+                        class: if current.rewards_enabled { "theme-switch on" } else { "theme-switch" },
+                        aria_label: if current.rewards_enabled { t.rewards_on } else { t.rewards_off },
+                        aria_pressed: current.rewards_enabled,
+                        onclick: move |_| preferences.with_mut(|prefs| {
+                            prefs.rewards_enabled = !prefs.rewards_enabled;
+                            prefs.save();
+                        }),
+                        span {}
+                    }
+                }
             }
         }
     }

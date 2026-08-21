@@ -119,6 +119,8 @@ pub struct Preferences {
     pub dark_mode: Option<bool>,
     pub week_start: WeekStart,
     pub language: Language,
+    /// Shows the Rewards tab and the todo difficulty picker.
+    pub rewards_enabled: bool,
 }
 
 impl Preferences {

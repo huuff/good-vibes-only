@@ -5,6 +5,7 @@
 
 mod ledger;
 mod nav;
+mod rewards;
 mod schedule;
 mod settings;
 mod sheet;
@@ -16,8 +17,9 @@ use dioxus::prelude::*;
 
 use crate::clock;
 use crate::preferences::Preferences;
+use crate::rewards::RewardData;
 use crate::store::{DEFAULT_STICKING_TARGET, Data};
-use crate::todos::{Todo, TodoData};
+use crate::todos::{Difficulty, Todo, TodoData};
 use schedule::ScheduleDraft;
 
 /// Tracked through the dioxus asset system (not inlined in index.html) so
@@ -71,8 +73,12 @@ pub struct Overlays {
     pub todo_name: Signal<String>,
     pub todo_date: Signal<String>,
     pub todo_time: Signal<String>,
+    pub todo_difficulty: Signal<Difficulty>,
     /// Todo whose edit sheet is open (the add form, prefilled).
     pub todo_edit: Signal<Option<u64>>,
+    pub adding_reward: Signal<bool>,
+    pub reward_name: Signal<String>,
+    pub reward_cost: Signal<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -80,6 +86,7 @@ pub enum Page {
     #[default]
     Today,
     Todos,
+    Rewards,
     Settings,
 }
 
@@ -104,13 +111,22 @@ impl Overlays {
         self.todo_name.set(String::new());
         self.todo_date.set(String::new());
         self.todo_time.set(String::new());
+        self.todo_difficulty.set(Difficulty::default());
         self.adding_todo.set(true);
+        push_history_entry();
+    }
+
+    pub fn open_add_reward(&mut self) {
+        self.reward_name.set(String::new());
+        self.reward_cost.set(String::new());
+        self.adding_reward.set(true);
         push_history_entry();
     }
 
     /// The add form, prefilled from an existing todo, in edit mode.
     pub fn open_edit_todo(&mut self, todo: &Todo) {
         self.todo_name.set(todo.name.clone());
+        self.todo_difficulty.set(todo.difficulty);
         self.todo_date.set(
             todo.target_date
                 .map(|d| d.format("%Y-%m-%d").to_string())
@@ -147,6 +163,7 @@ fn push_history_entry() {
 pub fn app() -> Element {
     let data = use_signal(Data::load);
     let todo_data = use_signal(TodoData::load);
+    let reward_data = use_signal(RewardData::load);
     let preferences = use_signal(Preferences::load);
     let mut system_dark = use_signal(|| false);
     let page = use_signal(Page::default);
@@ -163,7 +180,11 @@ pub fn app() -> Element {
         todo_name: use_signal(String::new),
         todo_date: use_signal(String::new),
         todo_time: use_signal(String::new),
+        todo_difficulty: use_signal(Difficulty::default),
         todo_edit: use_signal(|| None),
+        adding_reward: use_signal(|| false),
+        reward_name: use_signal(String::new),
+        reward_cost: use_signal(String::new),
     };
 
     // Back-gesture handling: every history pop closes the open sheet
@@ -182,6 +203,7 @@ pub fn app() -> Element {
                 overlays.adding.set(false);
                 overlays.adding_todo.set(false);
                 overlays.todo_edit.set(None);
+                overlays.adding_reward.set(false);
             }
         });
     });
@@ -210,19 +232,21 @@ pub fn app() -> Element {
     };
 
     let lang = preferences().language;
+    let rewards_on = preferences().rewards_enabled;
     rsx! {
         document::Stylesheet { href: CSS }
         document::Style { {font_faces()} }
         div { class: theme_class,
             div { class: "shell",
-                {nav::rail(page, overlays, lang)}
+                {nav::rail(page, overlays, lang, rewards_on)}
                 main { class: "main",
                     match page() {
                         Page::Today => rsx! { {ledger::ledger(data, overlays, preferences)} },
                         Page::Todos => rsx! { {todos::todos(todo_data, overlays, lang)} },
+                        Page::Rewards => rsx! { {rewards::rewards(reward_data, data, todo_data, lang)} },
                         Page::Settings => rsx! { {settings::settings(preferences, system_dark)} },
                     }
-                    {nav::bottom_bar(page, overlays, lang)}
+                    {nav::bottom_bar(page, overlays, lang, rewards_on)}
                 }
                 if page() == Page::Today {
                     {sidebar::sidebar(data, preferences)}
@@ -230,7 +254,8 @@ pub fn app() -> Element {
             }
             {sheet::detail_sheet(data, overlays, preferences)}
             {sheet::add_sheet(data, overlays, preferences)}
-            {todos::add_sheet(todo_data, overlays, lang)}
+            {todos::add_sheet(todo_data, overlays, lang, rewards_on)}
+            {rewards::add_sheet(reward_data, overlays, lang)}
         }
     }
 }

@@ -5,7 +5,12 @@ use dioxus::prelude::*;
 use super::{Overlays, Page};
 use crate::preferences::Language;
 
-pub fn rail(mut page: Signal<Page>, mut overlays: Overlays, lang: Language) -> Element {
+pub fn rail(
+    mut page: Signal<Page>,
+    mut overlays: Overlays,
+    lang: Language,
+    rewards: bool,
+) -> Element {
     let t = lang.strings();
     rsx! {
         div { class: "rail",
@@ -23,6 +28,13 @@ pub fn rail(mut page: Signal<Page>, mut overlays: Overlays, lang: Language) -> E
                 onclick: move |_| page.set(Page::Todos),
                 {t.todos_tab}
             }
+            if rewards {
+                button {
+                    class: if page() == Page::Rewards { "rail-tab on" } else { "rail-tab" },
+                    onclick: move |_| page.set(Page::Rewards),
+                    {t.rewards_tab}
+                }
+            }
             button {
                 class: if page() == Page::Settings { "rail-tab on" } else { "rail-tab" },
                 onclick: move |_| page.set(Page::Settings),
@@ -30,9 +42,18 @@ pub fn rail(mut page: Signal<Page>, mut overlays: Overlays, lang: Language) -> E
             }
             if page() != Page::Settings {
                 div { class: "rail-new",
-                    button { onclick: move |_| if page() == Page::Todos { overlays.open_add_todo() } else { overlays.open_add() },
+                    button {
+                        onclick: move |_| match page() {
+                            Page::Todos => overlays.open_add_todo(),
+                            Page::Rewards => overlays.open_add_reward(),
+                            _ => overlays.open_add(),
+                        },
                         span { class: "plus-sign", "+" }
-                        if page() == Page::Todos { {t.new_todo} } else { {t.new_habit} }
+                        match page() {
+                            Page::Todos => rsx! { {t.new_todo} },
+                            Page::Rewards => rsx! { {t.new_reward} },
+                            _ => rsx! { {t.new_habit} },
+                        }
                     }
                 }
             }
@@ -40,15 +61,29 @@ pub fn rail(mut page: Signal<Page>, mut overlays: Overlays, lang: Language) -> E
     }
 }
 
-pub fn bottom_bar(mut page: Signal<Page>, mut overlays: Overlays, lang: Language) -> Element {
+pub fn bottom_bar(
+    mut page: Signal<Page>,
+    mut overlays: Overlays,
+    lang: Language,
+    rewards: bool,
+) -> Element {
     let t = lang.strings();
+    let fab_label = match page() {
+        Page::Todos => t.create_new_todo,
+        Page::Rewards => t.create_new_reward,
+        _ => t.create_new_habit,
+    };
     rsx! {
         if page() != Page::Settings {
             button {
-                class: if page() == Page::Todos { "fab-new todo-fab" } else { "fab-new" },
-                aria_label: if page() == Page::Todos { t.create_new_todo } else { t.create_new_habit },
-                title: if page() == Page::Todos { t.create_new_todo } else { t.create_new_habit },
-                onclick: move |_| if page() == Page::Todos { overlays.open_add_todo() } else { overlays.open_add() },
+                class: if page() == Page::Today { "fab-new" } else { "fab-new todo-fab" },
+                aria_label: fab_label,
+                title: fab_label,
+                onclick: move |_| match page() {
+                    Page::Todos => overlays.open_add_todo(),
+                    Page::Rewards => overlays.open_add_reward(),
+                    _ => overlays.open_add(),
+                },
                 "+"
             }
         }
@@ -62,6 +97,13 @@ pub fn bottom_bar(mut page: Signal<Page>, mut overlays: Overlays, lang: Language
                 class: if page() == Page::Todos { "bar-tab on" } else { "bar-tab" },
                 onclick: move |_| page.set(Page::Todos),
                 {t.todos_tab}
+            }
+            if rewards {
+                button {
+                    class: if page() == Page::Rewards { "bar-tab on" } else { "bar-tab" },
+                    onclick: move |_| page.set(Page::Rewards),
+                    {t.rewards_tab}
+                }
             }
             button {
                 class: if page() == Page::Settings { "bar-tab on" } else { "bar-tab" },

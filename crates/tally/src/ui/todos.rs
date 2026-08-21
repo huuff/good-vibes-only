@@ -7,7 +7,7 @@ use super::Overlays;
 use crate::clock;
 use crate::i18n::fill;
 use crate::preferences::Language;
-use crate::todos::{Todo, TodoData};
+use crate::todos::{Difficulty, Todo, TodoData};
 
 pub fn todos(data: Signal<TodoData>, overlays: Overlays, lang: Language) -> Element {
     let t = lang.strings();
@@ -155,7 +155,12 @@ fn todo_meta(todo: &Todo, today: NaiveDate, lang: Language) -> Option<String> {
 
 /// The todo form sheet: creates when opened from the FAB, edits (same
 /// form, prefilled, plus delete) when opened from a row.
-pub fn add_sheet(mut data: Signal<TodoData>, mut overlays: Overlays, lang: Language) -> Element {
+pub fn add_sheet(
+    mut data: Signal<TodoData>,
+    mut overlays: Overlays,
+    lang: Language,
+    rewards: bool,
+) -> Element {
     let editing = (overlays.todo_edit)();
     if !(overlays.adding_todo)() && editing.is_none() {
         return rsx! {};
@@ -175,9 +180,10 @@ pub fn add_sheet(mut data: Signal<TodoData>, mut overlays: Overlays, lang: Langu
                         if valid {
                             let date = NaiveDate::parse_from_str(&(overlays.todo_date)(), "%Y-%m-%d").ok();
                             let time = NaiveTime::parse_from_str(&(overlays.todo_time)(), "%H:%M").ok();
+                            let difficulty = (overlays.todo_difficulty)();
                             match editing {
-                                Some(id) => data.write().update(id, &(overlays.todo_name)(), date, time),
-                                None => data.write().add(&(overlays.todo_name)(), date, time),
+                                Some(id) => data.write().update(id, &(overlays.todo_name)(), date, time, difficulty),
+                                None => data.write().add(&(overlays.todo_name)(), date, time, difficulty),
                             }
                             data().save();
                             overlays.dismiss();
@@ -188,6 +194,27 @@ pub fn add_sheet(mut data: Signal<TodoData>, mut overlays: Overlays, lang: Langu
                     div { class: "todo-fields",
                         label { class: "todo-field", span { class: "field-label", {t.target_date} } input { class: "input", r#type: "date", value: "{overlays.todo_date}", oninput: move |event| overlays.todo_date.set(event.value()) } }
                         label { class: "todo-field", span { class: "field-label", {t.time_optional} } input { class: "input", r#type: "time", disabled: (overlays.todo_date)().is_empty(), value: "{overlays.todo_time}", oninput: move |event| overlays.todo_time.set(event.value()) } }
+                    }
+                    if rewards {
+                        span { class: "field-label", {t.difficulty} }
+                        div { class: "seg", role: "radiogroup", aria_label: t.difficulty,
+                            for level in Difficulty::ALL {
+                                button {
+                                    r#type: "button",
+                                    role: "radio",
+                                    class: if (overlays.todo_difficulty)() == level { "seg-opt on" } else { "seg-opt" },
+                                    aria_checked: (overlays.todo_difficulty)() == level,
+                                    onclick: move |_| overlays.todo_difficulty.set(level),
+                                    {
+                                        match level {
+                                            Difficulty::Easy => t.diff_easy,
+                                            Difficulty::Medium => t.diff_medium,
+                                            Difficulty::Hard => t.diff_hard,
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     p { class: "todo-form-hint", {t.todo_hint} }
                     button { class: "btn", r#type: "submit", disabled: !valid,
