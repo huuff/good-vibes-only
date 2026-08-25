@@ -289,6 +289,40 @@
               }
             ];
           }).activationPackage;
+
+        hm-orca =
+          (home-manager.lib.homeManagerConfiguration {
+            inherit pkgs;
+            modules = [
+              self.homeManagerModules.orca
+              {
+                home = {
+                  username = "vibes";
+                  homeDirectory = "/home/vibes";
+                  stateVersion = "25.11";
+                };
+                # Enable the harnesses so the check evaluates the merged
+                # hook settings; any package satisfies the eval-only check.
+                programs = {
+                  claude-code = {
+                    enable = true;
+                    package = pkgs.hello;
+                  };
+                  codex = {
+                    enable = true;
+                    package = pkgs.hello;
+                  };
+                  orca = {
+                    enable = true;
+                    integrations = {
+                      claude.enable = true;
+                      codex.enable = true;
+                    };
+                  };
+                };
+              }
+            ];
+          }).activationPackage;
       });
     };
 }

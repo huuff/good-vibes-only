@@ -83,6 +83,8 @@
       args = [
         "--ignore"
         "forks/**"
+        "--ignore"
+        ".wt/**"
       ];
     };
     deadnix.enable = true;
