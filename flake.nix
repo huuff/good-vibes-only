@@ -295,14 +295,14 @@
             inherit pkgs;
             modules = [
               self.homeManagerModules.orca
-              {
+              ({ config, ... }: {
                 home = {
                   username = "vibes";
                   homeDirectory = "/home/vibes";
                   stateVersion = "25.11";
                 };
                 # Enable the harnesses so the check evaluates the merged
-                # hook settings; any package satisfies the eval-only check.
+                # hook settings and verifies that Orca itself is installed.
                 programs = {
                   claude-code = {
                     enable = true;
@@ -320,7 +320,13 @@
                     };
                   };
                 };
-              }
+                assertions = [
+                  {
+                    assertion = lib.any (package: (package.pname or "") == "orca") config.home.packages;
+                    message = "programs.orca.enable must install the Orca package";
+                  }
+                ];
+              })
             ];
           }).activationPackage;
       });

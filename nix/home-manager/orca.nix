@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 
@@ -89,13 +90,11 @@ in
   options.programs.orca = {
     enable = lib.mkEnableOption "Orca, the agent development environment";
 
-    # Orca is not packaged in nixpkgs (pkgs.orca is the GNOME screen
-    # reader); the integrations work without it since the hook commands
-    # only reference runtime scripts the app maintains itself.
     package = lib.mkOption {
       type = lib.types.nullOr lib.types.package;
-      default = null;
-      description = "Orca package to install, if any.";
+      default = pkgs.callPackage ../packages/orca.nix { };
+      defaultText = lib.literalExpression "pkgs.callPackage ../packages/orca.nix { }";
+      description = "Orca package to install. Set to null to configure integrations without installing Orca.";
     };
 
     integrations = {
