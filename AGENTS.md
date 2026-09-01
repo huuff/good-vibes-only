@@ -19,7 +19,10 @@ plus reusable Nix modules under `nix/`.
 - Pre-commit hooks enforce rustfmt, clippy, and Conventional Commit
   messages (`feat:`, `fix:`, `chore:`, ...). Fix failures; never
   `--no-verify`.
-- Commit when a task is finished — don't leave completed work uncommitted.
+- Always commit when a task is finished — don't leave completed work
+  uncommitted, and don't end a session with your changes still dirty in
+  `git status`. This applies to every change in this repo (crates, `nix/`,
+  docs), not just Rust code.
 - The flake exports one package per crate (`packages.<name>`, built
   with `cargo build -p <name>`); keep `Cargo.lock` committed and up
   to date.
