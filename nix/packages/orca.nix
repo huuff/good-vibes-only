@@ -61,4 +61,15 @@ else
       src
       meta
       ;
+    extraInstallCommands =
+      let
+        contents = appimageTools.extractType2 { inherit pname version src; };
+      in
+      ''
+        install -Dm444 ${contents}/orca-ide.desktop $out/share/applications/orca.desktop
+        substituteInPlace $out/share/applications/orca.desktop \
+          --replace-fail 'Exec=AppRun --no-sandbox %U' 'Exec=orca %U'
+        mkdir -p $out/share
+        cp -r ${contents}/usr/share/icons $out/share/
+      '';
   }
