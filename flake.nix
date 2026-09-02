@@ -12,11 +12,6 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    codex = {
-      url = "github:openai/codex/rust-v0.152.0";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.rust-overlay.follows = "rust-overlay";
-    };
     opendesign = {
       url = "path:./forks/opendesign";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -30,7 +25,6 @@
       nixpkgs,
       crane,
       home-manager,
-      codex,
       opendesign,
       ...
     }:
@@ -52,16 +46,7 @@
           fileName: _: lib.nameValuePair (lib.removeSuffix ".nix" fileName) (dir + "/${fileName}")
         ) (lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".nix" n) (builtins.readDir dir));
 
-      extraPackages =
-        pkgs:
-        lib.mapAttrs (
-          name: f:
-          pkgs.callPackage f (
-            lib.optionalAttrs (name == "codex-trust-state") {
-              codexUpstream = codex.packages.${pkgs.stdenv.hostPlatform.system}.codex-rs;
-            }
-          )
-        ) (nixFilesIn ./nix/packages);
+      extraPackages = pkgs: lib.mapAttrs (_: f: pkgs.callPackage f { }) (nixFilesIn ./nix/packages);
 
       # One package per workspace crate, built with `cargo build -p <crate>`.
       crates = lib.attrNames (lib.filterAttrs (_: t: t == "directory") (builtins.readDir ./crates));

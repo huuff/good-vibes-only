@@ -1,29 +1,5 @@
 {
   "nodes": {
-    "codex": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "rust-overlay": [
-          "rust-overlay"
-        ]
-      },
-      "locked": {
-        "lastModified": 1788225005,
-        "narHash": "sha256-UmdecJhS8khsz8BZzIBgmvdj589dQ/gCrbJtRj9uoBg=",
-        "owner": "openai",
-        "repo": "codex",
-        "rev": "316795b3cf2a45e90d121d9f46499d4658b2645c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "openai",
-        "ref": "rust-v0.152.0",
-        "repo": "codex",
-        "type": "github"
-      }
-    },
     "crane": {
       "locked": {
         "lastModified": 1785782307,
@@ -201,7 +177,6 @@
     },
     "root": {
       "inputs": {
-        "codex": "codex",
         "crane": "crane",
         "home-manager": "home-manager",
         "nixpkgs": "nixpkgs",
