@@ -1,4 +1,5 @@
 import { expect, test } from '@/playwright/suite';
+import { ACTIVE_ARTIFACT_PREVIEW_SELECTOR } from '@/playwright/artifact-preview';
 import { expectStableCount } from '@/playwright/assertions';
 import { applyStandardMocks, routeAgents, routeSuccessfulRuns } from '@/playwright/mock-factory';
 import { clickDeckNextSlide, openAllProjectFiles } from '@/playwright/workspace';
@@ -7,8 +8,6 @@ import { pathToFileURL } from 'node:url';
 import { T } from '@/timeouts';
 
 const STORAGE_KEY = 'open-design:config';
-const ACTIVE_ARTIFACT_PREVIEW_SELECTOR = '[data-testid="artifact-preview-frame"]:visible, [data-testid="artifact-preview-frame-url-load"]:visible, [data-testid="artifact-preview-frame-srcdoc"]:visible, [data-testid="live-artifact-preview-frame"]:visible';
-
 test.describe.configure({ timeout: T.xlong });
 
 function artifactPreview(page: Page) {
@@ -948,7 +947,7 @@ async function gotoEntryHome(page: Page) {
     await waitForLoadingToClear(page).catch(() => {});
     if (await page.getByTestId('home-hero').isVisible({ timeout: 3_000 }).catch(() => false)) break;
   }
-  const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve Open Design' });
+  const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve OpenDesign' });
   if (await privacyDialog.isVisible()) {
     await privacyDialog.getByRole('button', { name: /I get it|not now|got it|don't share/i }).click();
     await expect(privacyDialog).toHaveCount(0);
@@ -1206,7 +1205,7 @@ async function openDesignFile(page: Page, fileName: string) {
 }
 
 async function waitForLoadingToClear(page: Page) {
-  await page.getByText('Loading Open Design…').waitFor({ state: 'hidden', timeout: T.long });
+  await page.getByText('Loading OpenDesign…').waitFor({ state: 'hidden', timeout: T.long });
 }
 
 async function expectFileSource(page: Page, projectId: string, fileName: string, snippets: string[]) {

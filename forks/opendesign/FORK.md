@@ -2,7 +2,7 @@
 
 This directory is forked from
 [`nexu-io/open-design`](https://github.com/nexu-io/open-design) at the latest
-stable `open-design-v0.19.2` tag (`a539ba57ce3ad4200b0a300007da82783ec66e12`).
+stable `open-design-v0.21.1` tag (`fbd4d48ebe21b20f4a2faaad0ad5e53aaeb1dc4b`).
 
 The fork permanently disables Open Design Cloud/AMR authentication. It keeps
 local coding-agent CLIs and user-supplied API providers (BYOK) as the supported

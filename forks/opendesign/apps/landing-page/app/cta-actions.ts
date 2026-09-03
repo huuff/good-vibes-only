@@ -15,6 +15,7 @@
 export const CTA_REPO = 'https://github.com/nexu-io/open-design';
 export const CTA_REPO_RELEASES = `${CTA_REPO}/releases`;
 export const DEEPSEEK_HARNESS_REPO = 'https://github.com/deepseek-ai/deepseek-harness';
+export const OPEN_DESIGN_DISCORD = 'https://discord.gg/mHAjSMV6gz';
 // On-site download page; ctaHref() localizes this per locale.
 export const DOWNLOAD_HREF = '/download/';
 const GET_STARTED_HREF = '/quickstart/';
@@ -40,29 +41,28 @@ export const downloadFirstCtas = (actions: readonly CtaAction[]): CtaAction[] =>
   return out;
 };
 
-// DeepSeek Harness translations originally shipped with the generic Open Design
-// CTA trio. Prefer translated labels when the current two-action shape exists;
-// otherwise retain the locale's translated download label and use a
-// language-neutral brand label for the upstream repository. This avoids leaking
-// an English sentence into every legacy locale without fabricating translations.
+// This guide leads with the OpenDesign download and routes follow-up questions
+// into the Discord community. Match by stable href so every locale keeps its
+// translated labels while the upstream Harness repository remains available in
+// the article's resource links instead of competing with the primary journey.
 export const deepseekHarnessHeroCtas = (
   actions: readonly CtaAction[],
 ): CtaAction[] => {
   const download = actions.find(
     (action) => action.href === DOWNLOAD_HREF || action.href === CTA_REPO_RELEASES,
   );
-  const harness = actions.find((action) => action.href === DEEPSEEK_HARNESS_REPO);
+  const discord = actions.find((action) => action.href === OPEN_DESIGN_DISCORD);
 
   return [
     {
-      ...(download ?? { label: 'Open Design' }),
+      ...(download ?? { label: 'OpenDesign' }),
       href: DOWNLOAD_HREF,
       external: false,
       variant: 'primary',
     },
     {
-      ...(harness ?? { label: 'DeepSeek Harness · GitHub' }),
-      href: DEEPSEEK_HARNESS_REPO,
+      ...(discord ?? { label: 'Discord' }),
+      href: OPEN_DESIGN_DISCORD,
       external: true,
       variant: 'ghost',
     },

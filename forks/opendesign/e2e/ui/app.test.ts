@@ -1,4 +1,5 @@
 import { expect, test } from '@/playwright/suite';
+import { ACTIVE_ARTIFACT_PREVIEW_SELECTOR } from '@/playwright/artifact-preview';
 import { openNewProjectModal as openNewProjectModalFromProjects } from '@/playwright/rail';
 import {
   applyStandardMocks,
@@ -16,7 +17,6 @@ import { automatedUiScenarios } from '@/playwright/resources';
 import type { UiScenario } from '@/playwright/resources';
 
 const STORAGE_KEY = 'open-design:config';
-const ACTIVE_ARTIFACT_PREVIEW_SELECTOR = '[data-testid="artifact-preview-frame"]:visible, [data-testid="artifact-preview-frame-url-load"]:visible, [data-testid="artifact-preview-frame-srcdoc"]:visible, [data-testid="live-artifact-preview-frame"]:visible';
 const APP_OWNED_SCENARIO_FLOWS = new Set([
   'design-files-upload',
   'design-files-delete',
@@ -166,6 +166,7 @@ for (const entry of automatedUiScenarios().filter(
     if (
       entry.flow === 'question-form-single-selection'
       || entry.flow === 'question-form-submit-persistence'
+      || entry.flow === 'question-form-single-answer'
     ) {
       await routeSuccessfulRuns(page, { runIdPrefix: 'mock-run' });
     }
@@ -225,6 +226,10 @@ for (const entry of automatedUiScenarios().filter(
     }
     if (entry.flow === 'question-form-single-selection') {
       await runQuestionFormSingleSelectionFlow(page, entry);
+      return;
+    }
+    if (entry.flow === 'question-form-single-answer') {
+      await runQuestionFormSingleAnswerFlow(page, entry);
       return;
     }
     if (entry.flow === 'question-form-submit-persistence') {
@@ -419,6 +424,7 @@ function scenarioPriority(entry: UiScenario): 'P0' | 'P1' | 'P2' {
       return 'P0';
     case 'deep-link-preview':
     case 'question-form-submit-persistence':
+    case 'question-form-single-answer':
     case 'generation-does-not-create-extra-file':
     case 'file-mention':
     case 'deck-pagination-next-prev-correctness':
@@ -922,6 +928,106 @@ async function runQuestionFormSubmitPersistenceFlow(
   await expect(page.locator('.question-form')).toHaveCount(0);
 }
 
+/**
+ * One question form occurrence yields exactly one answer (OPEND-2367).
+ *
+ * The assertions read the daemon's conversation rather than the rendered form:
+ * a UI that merely looks locked while the host took a second answer is the
+ * failure this pins.
+ *
+ * Scope, stated honestly: this is a guard, not a reproduction. It stays green
+ * on the pre-fix build, because once the answer reaches the message list the
+ * old build locked the form from history too. OPEND-2367's window is the one
+ * BEFORE that — the answer still in flight or parked in a busy conversation's
+ * queue — which needs the submit promise held open and is covered at the
+ * component layer (`AssistantMessage.question-form-resubmit.test.tsx`, red
+ * before the fix). What this adds is the end-to-end invariant those unit
+ * specs cannot state: after a double submit, a project switch and a reload,
+ * the daemon still holds exactly one answer for the occurrence.
+ */
+async function runQuestionFormSingleAnswerFlow(
+  page: Page,
+  _entry: UiScenario,
+) {
+  await seedQuestionFormMessage(page);
+  const { projectId, conversationId } = await getCurrentProjectContext(page);
+
+  const messagesFor = async (): Promise<Array<{ id: string; role: string; content: string }>> => {
+    const response = await page.request.get(
+      `/api/projects/${projectId}/conversations/${conversationId}/messages`,
+    );
+    expect(response.ok()).toBeTruthy();
+    const { messages } = (await response.json()) as {
+      messages: Array<{ id: string; role: string; content: string }>;
+    };
+    return messages;
+  };
+  const answersFor = async (): Promise<string[]> =>
+    (await messagesFor())
+      .filter(
+        (message) =>
+          message.role === 'user' && message.content.includes('[form answers — discovery]'),
+      )
+      .map((message) => message.content);
+
+  const form = page.locator('.question-form').first();
+  await expect(form).toBeVisible();
+  const toneQuestion = form.locator('.qf-field', { has: page.getByText('Visual tone') });
+  await toneQuestion.locator('label.qf-visual-card[title="Quiet SaaS"]').click();
+
+  // A rapid double submit: the second click lands before the first send has
+  // settled, which is the window the component-local lock was built for.
+  const send = form.getByRole('button', { name: 'Send answers' });
+  await send.click();
+  await send.click({ force: true, timeout: T.short }).catch(() => {});
+
+  await expect(page.getByTestId('question-form-summary')).toBeVisible();
+  expect(await answersFor()).toHaveLength(1);
+
+  // Leaving the project and coming back rebuilds the form from scratch.
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.goto(`/projects/${projectId}/conversations/${conversationId}`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await expectWorkspaceReady(page);
+  await expect(page.getByTestId('question-form-summary')).toBeVisible();
+  await expect(page.locator('.question-form')).toHaveCount(0);
+  expect(await answersFor()).toHaveLength(1);
+
+  // And so does a full reload.
+  await page.reload();
+  await expectWorkspaceReady(page);
+  await expect(page.getByTestId('question-form-summary')).toBeVisible();
+  await expect(page.locator('.question-form')).toHaveCount(0);
+  expect(await answersFor()).toHaveLength(1);
+
+  // A second submitter for the same occurrence — another tab, which never saw
+  // this one's form lock — reaches the daemon directly. The occurrence claim
+  // is decided where the check and the write are one operation, so the stored
+  // answer stays the one the surviving run read.
+  const stored = await messagesFor();
+  const answerRow = stored.find(
+    (message) =>
+      message.role === 'user' && message.content.includes('[form answers — discovery]'),
+  );
+  expect(answerRow).toBeTruthy();
+  const claim = await page.request.put(
+    `/api/projects/${projectId}/conversations/${conversationId}/messages/${answerRow!.id}`,
+    {
+      data: {
+        role: 'user',
+        content: '[form answers — discovery]\n- Visual tone: Editorial / magazine',
+        createOnly: true,
+        createdAt: Date.now(),
+      },
+    },
+  );
+  expect(claim.ok(), `create-only claim: ${await claim.text()}`).toBeTruthy();
+  const claimed = (await claim.json()) as { message: { content: string } };
+  expect(claimed.message.content).toBe(answerRow!.content);
+  expect(await answersFor()).toHaveLength(1);
+}
+
 async function runGenerationDoesNotCreateExtraFileFlow(
   page: Page,
   entry: UiScenario,
@@ -1009,17 +1115,45 @@ async function runCommentAttachmentFlow(
 
 async function runDeckPaginationNextPrevCorrectnessFlow(page: Page) {
   const { projectId } = await getCurrentProjectContext(page);
-  await seedDeckArtifact(page, projectId, 'pagination.html', 'Pagination Deck', ['Slide One', 'Slide Two', 'Slide Three']);
+  await seedDeckStageArtifact(page, projectId, 'pagination.html', 'Pagination Deck', [
+    'Slide One',
+    'Slide Two',
+    'Slide Three',
+  ]);
   await gotoDesignFile(page, projectId, 'pagination.html');
 
   const frame = artifactPreviewFrame(page);
+  const thumbnails = page.locator('.deck-thumbnail-button');
+  const stage = frame.locator('deck-stage');
+  const speakerNotes = page.getByTestId('speaker-notes-panel');
+  await expect(thumbnails).toHaveCount(3);
   await expect(frame.getByText('Slide One')).toBeVisible();
-  await clickDeckNextSlide(page);
-  await expect(frame.getByText('Slide Two')).toBeVisible();
-  await clickDeckNextSlide(page);
+  await expect(speakerNotes).toContainText('Speaker note for Slide One');
+
+  await thumbnails.nth(2).click();
+  await expect(thumbnails.nth(2)).toHaveAttribute('aria-current', 'true');
+  await expect(stage).toHaveJSProperty('index', 2);
   await expect(frame.getByText('Slide Three')).toBeVisible();
+  await expect(frame.getByText('Slide One')).toBeHidden();
+  await expect(page.locator('.deck-floating-count')).toContainText('3/3');
+  await expect(speakerNotes).toContainText('Speaker note for Slide Three');
+
   await clickDeckPreviousSlide(page);
+  await expect(stage).toHaveJSProperty('index', 1);
   await expect(frame.getByText('Slide Two')).toBeVisible();
+  await expect(page.locator('.deck-floating-count')).toContainText('2/3');
+  await expect(speakerNotes).toContainText('Speaker note for Slide Two');
+
+  await clickDeckNextSlide(page);
+  await expect(stage).toHaveJSProperty('index', 2);
+  await expect(frame.getByText('Slide Three')).toBeVisible();
+
+  await stage.evaluate((element) => {
+    (element as HTMLElement & { goTo(index: number): void }).goTo(0);
+  });
+  await expect(thumbnails.nth(0)).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator('.deck-floating-count')).toContainText('1/3');
+  await expect(speakerNotes).toContainText('Speaker note for Slide One');
 }
 
 async function runDeckPaginationPerFileIsolatedFlow(page: Page) {
@@ -1088,6 +1222,88 @@ async function seedDeckArtifact(
   );
 }
 
+async function seedDeckStageArtifact(
+  page: Page,
+  projectId: string,
+  fileName: string,
+  title: string,
+  slides: string[],
+) {
+  const slideHtml = slides
+    .map((slide, index) => {
+      let marker = 'class="ppt-slide"';
+      if (index === 0) {
+        marker = `class="slide" data-screen-label="01 ${slide}"`;
+      } else if (index === 1) {
+        marker = `class="agenda" data-screen-label="02 ${slide}"`;
+      }
+      return `<section ${marker}><h1>${slide}</h1></section>`;
+    })
+    .join('\n');
+  const notes = JSON.stringify(slides.map((slide) => `Speaker note for ${slide}`));
+  await seedProjectFile(
+    page,
+    projectId,
+    fileName,
+    `<!doctype html>
+<html>
+<head>
+  <style>
+    body { margin: 0; background: #111827; color: white; font-family: sans-serif; }
+    aside { display: none; }
+    deck-stage { display: block; width: 100vw; height: 100vh; }
+    deck-stage > section { display: none; width: 100%; height: 100%; place-items: center; }
+    deck-stage > section[data-deck-active] { display: grid; }
+  </style>
+</head>
+<body>
+  <aside data-screen-label="Prototype navigation">Not a slide</aside>
+  <deck-stage width="1280" height="720">${slideHtml}</deck-stage>
+  <script>
+    customElements.define('deck-stage', class extends HTMLElement {
+      connectedCallback() {
+        this._slides = Array.from(this.children);
+        this._index = 0;
+        this._apply('init');
+      }
+      get index() { return this._index; }
+      get length() { return this._slides.length; }
+      _apply(reason) {
+        this._slides.forEach((slide, index) => {
+          slide.toggleAttribute('data-deck-active', index === this._index);
+          slide.setAttribute('aria-hidden', index === this._index ? 'false' : 'true');
+        });
+        window.postMessage({ slideIndexChanged: this._index }, '*');
+        this.dispatchEvent(new CustomEvent('slidechange', {
+          detail: { index: this._index, total: this._slides.length, reason },
+          bubbles: true,
+          composed: true,
+        }));
+      }
+      goTo(index) {
+        this._index = Math.max(0, Math.min(this._slides.length - 1, index));
+        this._apply('api');
+      }
+      next() { this.goTo(this._index + 1); }
+      prev() { this.goTo(this._index - 1); }
+      reset() { this.goTo(0); }
+    });
+  </script>
+  <script type="application/json" id="speaker-notes">${notes}</script>
+</body>
+</html>`,
+    undefined,
+    {
+      version: 1,
+      kind: 'deck',
+      title,
+      entry: fileName,
+      renderer: 'deck-html',
+      exports: ['html', 'pdf'],
+    },
+  );
+}
+
 async function seedProjectFile(
   page: Page,
   projectId: string,
@@ -1139,7 +1355,7 @@ async function clickVisible(locator: Locator) {
 async function gotoEntryHome(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await waitForLoadingToClear(page);
-  const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve Open Design' });
+  const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve OpenDesign' });
   if (await privacyDialog.isVisible()) {
     await privacyDialog.getByRole('button', { name: /I get it|not now|got it|don't share/i }).click();
     await expect(privacyDialog).toHaveCount(0);
@@ -1153,7 +1369,7 @@ async function openNewProjectModal(page: Page) {
 }
 
 async function waitForLoadingToClear(page: Page) {
-  await page.getByText('Loading Open Design…').waitFor({ state: 'hidden', timeout: T.long });
+  await page.getByText('Loading OpenDesign…').waitFor({ state: 'hidden', timeout: T.long });
 }
 
 async function getCurrentProjectContext(
