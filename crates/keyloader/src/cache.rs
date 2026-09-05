@@ -50,6 +50,9 @@ pub struct Cache {
     /// Last time keyloader itself added each 1Password SSH item.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub ssh_loaded_at: HashMap<String, u64>,
+    /// Explicit SSH lifetimes in seconds, by item id.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub ssh_lifetimes: HashMap<String, u64>,
     /// Last time keyloader itself preset each GPG keygrip, by item id.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub gpg_preset_at: HashMap<String, HashMap<String, u64>>,
@@ -62,6 +65,7 @@ impl Cache {
             ssh,
             gpg,
             ssh_loaded_at: HashMap::new(),
+            ssh_lifetimes: HashMap::new(),
             gpg_preset_at: HashMap::new(),
         }
     }
@@ -81,6 +85,9 @@ impl Cache {
             {
                 self.ssh_loaded_at
                     .insert(item.summary.id.clone(), *loaded_at);
+                if let Some(seconds) = previous.ssh_lifetimes.get(&item.summary.id) {
+                    self.ssh_lifetimes.insert(item.summary.id.clone(), *seconds);
+                }
             }
         }
         for item in &self.gpg {
@@ -187,6 +194,7 @@ mod tests {
             vec![],
         );
         cache.ssh_loaded_at.insert("abc".into(), 1234);
+        cache.ssh_lifetimes.insert("abc".into(), 21600);
         let json = serde_json::to_string(&cache).unwrap();
         let back: Cache = serde_json::from_str(&json).unwrap();
         assert_eq!(back.ssh.len(), 1);
@@ -195,6 +203,23 @@ mod tests {
         assert_eq!(back.ssh[0].fingerprint.as_deref(), Some("SHA256:abc"));
         assert_eq!(back.ssh_loaded_at.get("abc"), Some(&1234));
         assert!(back.gpg.is_empty());
+        assert_eq!(back.ssh_lifetimes.get("abc"), Some(&21600));
+        let mut refreshed = Cache::new(back.ssh, vec![]);
+        refreshed.carry_tracking_from(&cache);
+        assert_eq!(refreshed.ssh_lifetimes.get("abc"), Some(&21600));
+        refreshed.ssh[0].summary.version = Some(2);
+        refreshed.ssh_lifetimes.clear();
+        refreshed.carry_tracking_from(&cache);
+        assert!(refreshed.ssh_lifetimes.is_empty());
+    }
+
+    #[test]
+    fn reads_cache_without_lifetimes() {
+        let cache: Cache = serde_json::from_str(
+            r#"{"updated_at":0,"ssh":[],"gpg":[],"ssh_loaded_at":{"abc":1234}}"#,
+        )
+        .unwrap();
+        assert!(cache.ssh_lifetimes.is_empty());
     }
 
     #[test]

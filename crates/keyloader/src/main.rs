@@ -36,6 +36,9 @@ enum Command {
         /// Reload keys even when they are already available locally
         #[arg(long)]
         force: bool,
+        /// SSH key lifetime (e.g. 6h, 30m, 1h30m); refreshes already loaded SSH keys
+        #[arg(long, value_name = "DURATION", value_parser = parse_time)]
+        time: Option<u64>,
     },
 }
 
@@ -44,7 +47,11 @@ fn main() -> ExitCode {
     let result = match cli.command {
         Command::Discover => discover(),
         Command::Status => status(),
-        Command::Load { dry_run, force } => load(dry_run, force),
+        Command::Load {
+            dry_run,
+            force,
+            time,
+        } => load(dry_run, force, time),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -60,6 +67,12 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn parse_time(value: &str) -> std::result::Result<u64, String> {
+    ssh::parse_duration(value)
+        .filter(|seconds| *seconds <= i32::MAX as u64)
+        .ok_or_else(|| "expected a positive duration (e.g. 6h, 30m, 1h30m, or seconds), at most 2147483647 seconds".to_string())
 }
 
 fn is_soft(err: &Error) -> bool {
@@ -217,8 +230,12 @@ fn status() -> Result<()> {
         let (glyph, state) = match item.fingerprint.as_deref() {
             Some(fpr) if loaded.contains(fpr) => {
                 let mut state = "loaded in ssh-agent".to_string();
+                let retention = cached_items
+                    .ssh_lifetimes
+                    .get(&item.summary.id)
+                    .map(|seconds| ssh::RetentionPolicy::Limited(*seconds));
                 match (
-                    &ssh_retention,
+                    retention.as_ref().unwrap_or(&ssh_retention),
                     cached_items.ssh_loaded_at.get(&item.summary.id),
                 ) {
                     (ssh::RetentionPolicy::Limited(lifetime), Some(loaded_at)) => {
@@ -314,7 +331,7 @@ fn status() -> Result<()> {
     Ok(())
 }
 
-fn load(dry_run: bool, force: bool) -> Result<()> {
+fn load(dry_run: bool, force: bool, time: Option<u64>) -> Result<()> {
     let mut cached_items = load_cache()?;
     let mut failures = 0;
     let mut changed = false;
@@ -324,12 +341,19 @@ fn load(dry_run: bool, force: bool) -> Result<()> {
 
     let loaded = ssh::loaded_fingerprints()?;
     for item in &cached_items.ssh {
-        match load_ssh_item(item, &loaded, dry_run, force) {
+        match load_ssh_item(item, &loaded, dry_run, force, time) {
             Ok((msg, loaded_now)) => {
                 if loaded_now {
                     cached_items
                         .ssh_loaded_at
                         .insert(item.summary.id.clone(), cache::now());
+                    if let Some(seconds) = time {
+                        cached_items
+                            .ssh_lifetimes
+                            .insert(item.summary.id.clone(), seconds);
+                    } else {
+                        cached_items.ssh_lifetimes.remove(&item.summary.id);
+                    }
                     changed = true;
                 }
                 println!(
@@ -403,7 +427,9 @@ fn load_ssh_item(
     loaded: &HashSet<String>,
     dry_run: bool,
     force: bool,
+    time: Option<u64>,
 ) -> Result<(&'static str, bool)> {
+    let force = force || time.is_some();
     if !force
         && let Some(fpr) = &item.fingerprint
         && loaded.contains(fpr)
@@ -421,7 +447,7 @@ fn load_ssh_item(
         ));
     }
     let key = op::read_ssh_private_key(&item.summary.vault.id, &item.summary.id)?;
-    ssh::add_key(&key)?;
+    ssh::add_key(&key, time)?;
     Ok((
         if force {
             "re-added to ssh-agent"
@@ -539,13 +565,62 @@ mod tests {
     use super::*;
 
     #[test]
+    fn parses_time_for_load() {
+        let cli = Cli::try_parse_from(["keyloader", "load", "--time", "6h"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Load {
+                time: Some(21600),
+                ..
+            }
+        ));
+        assert_eq!(parse_time("1h30m").unwrap(), 5400);
+        assert_eq!(parse_time("90").unwrap(), 90);
+        for value in [
+            "",
+            "0",
+            "-1",
+            "forever",
+            "6hours",
+            "2147483648",
+            "18446744073709551615w",
+        ] {
+            assert!(
+                Cli::try_parse_from(["keyloader", "load", "--time", value]).is_err(),
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
+    fn timed_load_refreshes_existing_ssh_keys() {
+        let item = cache::Item {
+            summary: serde_json::from_str(
+                r#"{"id":"abc","title":"key","vault":{"id":"v1","name":"Personal"}}"#,
+            )
+            .unwrap(),
+            fingerprint: Some("SHA256:abc".into()),
+        };
+        let loaded = HashSet::from(["SHA256:abc".to_string()]);
+        assert_eq!(
+            load_ssh_item(&item, &loaded, true, false, None).unwrap(),
+            ("already loaded", false)
+        );
+        assert_eq!(
+            load_ssh_item(&item, &loaded, true, false, Some(21600)).unwrap(),
+            ("would re-add to ssh-agent", false)
+        );
+    }
+
+    #[test]
     fn parses_force_for_load() {
         let cli = Cli::try_parse_from(["keyloader", "load", "--force"]).unwrap();
         assert!(matches!(
             cli.command,
             Command::Load {
                 dry_run: false,
-                force: true
+                force: true,
+                time: None
             }
         ));
     }
@@ -557,7 +632,8 @@ mod tests {
             cli.command,
             Command::Load {
                 dry_run: true,
-                force: true
+                force: true,
+                time: None
             }
         ));
     }

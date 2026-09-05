@@ -33,7 +33,7 @@ pub fn retention_policy() -> RetentionPolicy {
     }
 }
 
-fn parse_duration(value: &str) -> Option<u64> {
+pub fn parse_duration(value: &str) -> Option<u64> {
     let mut total = 0_u64;
     let mut digits = String::new();
     for character in value.chars() {
@@ -188,12 +188,15 @@ pub fn parse_listing(listing: &str) -> HashSet<String> {
 /// SSH_ASKPASS_REQUIRE=never keeps a passphrase-protected key from
 /// hanging on a GUI prompt; it fails instead, with a hint. 1Password is
 /// the encryption at rest, so keys are expected to be stored unencrypted.
-pub fn add_key(private_key: &str) -> Result<()> {
+pub fn add_key(private_key: &str, time: Option<u64>) -> Result<()> {
     let mut input = Zeroizing::new(private_key.to_string());
     if !input.ends_with('\n') {
         input.push('\n');
     }
     let mut cmd = Command::new("ssh-add");
+    if let Some(seconds) = time {
+        cmd.args(["-t", &seconds.to_string()]);
+    }
     cmd.arg("-").env("SSH_ASKPASS_REQUIRE", "never");
     let out = proc::run_with_stdin(cmd, input.as_bytes())?;
     if !out.status.success() {

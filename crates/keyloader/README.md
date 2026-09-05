@@ -9,6 +9,7 @@ $ keyloader discover   # fetch the key list from 1Password, cache it locally
 $ keyloader status     # which of those keys are already usable locally
 $ keyloader load       # import/add whatever is missing (safe to re-run)
 $ keyloader load --force # reload every key, refreshing agent state
+$ keyloader load --time 6h # add/refresh SSH keys with a six-hour lifetime
 $ keyloader load --dry-run
 ```
 
@@ -34,6 +35,14 @@ instead of listing items through `op`, so:
   actually missing; when everything is already loaded it makes no `op`
   calls at all. Pass `--force` to fetch and reload every key, including
   re-adding SSH keys and re-importing GPG keys and their passphrases.
+
+`load --time DURATION` sets the lifetime of SSH keys added to the agent,
+including refreshing already loaded SSH keys. Accepts seconds or durations
+such as `30m`, `6h`, `1h30m`, and `2d` (positive, at most 2147483647 seconds).
+`status` uses this lifetime for its estimated countdown. Without `--time`,
+SSH keys use the agent's default lifetime. GPG passphrase caching continues
+to use gpg-agent's `max-cache-ttl`. Combine with `--dry-run` to preview or
+`--force` to also reload GPG keys.
 
 The cache never refreshes implicitly: re-run `keyloader discover` after
 adding, removing or rotating keys in 1Password. Both commands tell you
