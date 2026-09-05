@@ -332,6 +332,11 @@ fn status() -> Result<()> {
 }
 
 fn load(dry_run: bool, force: bool, time: Option<u64>) -> Result<()> {
+    if time.is_some() {
+        eprintln!(
+            "keyloader: --time applies only to SSH keys; GPG passphrase caching uses gpg-agent's max-cache-ttl."
+        );
+    }
     let mut cached_items = load_cache()?;
     let mut failures = 0;
     let mut changed = false;
