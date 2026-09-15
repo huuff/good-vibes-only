@@ -1,0 +1,11 @@
+--- a/camoufox/addons.py
++++ b/camoufox/addons.py
+@@ -44,6 +44,8 @@
+ 
+     addons = [addon for addon in DefaultAddons if addon not in exclude_list]
+ 
++    if not addons:
++        return
+     with Lock():
+         maybe_download_addons(addons, addons_list)
+ 

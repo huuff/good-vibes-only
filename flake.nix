@@ -46,7 +46,11 @@
           fileName: _: lib.nameValuePair (lib.removeSuffix ".nix" fileName) (dir + "/${fileName}")
         ) (lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".nix" n) (builtins.readDir dir));
 
-      extraPackages = pkgs: lib.mapAttrs (_: f: pkgs.callPackage f { }) (nixFilesIn ./nix/packages);
+      extraPackages =
+        pkgs:
+        lib.filterAttrs (_: package: lib.meta.availableOn pkgs.stdenv.hostPlatform package) (
+          lib.mapAttrs (_: f: pkgs.callPackage f { }) (nixFilesIn ./nix/packages)
+        );
 
       # One package per workspace crate, built with `cargo build -p <crate>`.
       crates = lib.attrNames (lib.filterAttrs (_: t: t == "directory") (builtins.readDir ./crates));
@@ -174,6 +178,28 @@
       };
 
       checks = forAllSystems (pkgs: {
+        camoufox-launch-settings =
+          pkgs.runCommand "camoufox-launch-settings"
+            {
+              nativeBuildInputs = [ pkgs.python3 ];
+            }
+            (
+              ''
+                export HOME="$TMPDIR/home"
+                mkdir -p "$HOME"
+                python ${./nix/camoufox}/test-launch.py
+              ''
+              + lib.optionalString (pkgs.stdenv.hostPlatform.system == "x86_64-linux") (
+                let
+                  adapter = self.packages.x86_64-linux.camoufox-playwright;
+                in
+                ''
+                  ${adapter.python}/bin/python ${./nix/camoufox/test-settings.py} ${adapter}/bin/camoufox-playwright
+                ''
+              )
+              + ''touch "$out"''
+            );
+
         packages = pkgs.symlinkJoin {
           name = "all-packages";
           paths = lib.attrValues self.packages.${pkgs.stdenv.hostPlatform.system};
