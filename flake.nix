@@ -52,6 +52,13 @@
           lib.mapAttrs (_: f: pkgs.callPackage f { }) (nixFilesIn ./nix/packages)
         );
 
+      playwrightChecks =
+        pkgs:
+        import ./nix/tests/playwright-cli.nix {
+          inherit pkgs home-manager;
+          module = ./nix/home-manager/playwright-cli.nix;
+        };
+
       # One package per workspace crate, built with `cargo build -p <crate>`.
       crates = lib.attrNames (lib.filterAttrs (_: t: t == "directory") (builtins.readDir ./crates));
       cratePackages =
@@ -178,6 +185,11 @@
       };
 
       checks = forAllSystems (pkgs: {
+        hm-playwright-chromium = (playwrightChecks pkgs).chromium;
+        hm-playwright-camoufox = (playwrightChecks pkgs).camoufox;
+        hm-playwright-both = (playwrightChecks pkgs).both;
+        hm-playwright-neither = (playwrightChecks pkgs).neither;
+
         camoufox-launch-settings =
           pkgs.runCommand "camoufox-launch-settings"
             {

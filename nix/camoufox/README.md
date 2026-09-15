@@ -34,39 +34,75 @@ with the real bundle executable, Firefox major 152, no default extensions, and
 GeoIP disabled. BrowserForge's packaged fingerprint data and Camoufox's bundled
 fonts eliminate runtime asset downloads. Do not run `camoufox fetch`.
 
-## Consumer nix-config changes
+## Home Manager module and nix-config migration
 
-Keep the existing pinned playwright-cli package. Consume the new packages from
-this flake; do not replace the CLI's Playwright dependency with the Python SDK's
-version. Example within the consumer's Home Manager configuration:
+Import `homeManagerModules.playwright-cli` (also available through `homeModules`).
+Keep the consumer's pinned CLI derivation; the module has no default CLI package.
+Inside the existing consumer Home Manager configuration, with the nono module
+already imported:
 
 ```nix
+{ config, lib, pkgs, inputs, derivations, ... }:
 let
-  vibes = inputs.good-vibes-only.packages.${pkgs.stdenv.hostPlatform.system};
-  configs = import "${inputs.good-vibes-only}/nix/camoufox/configurations.nix" {
-    inherit pkgs;
-    inherit (vibes) camoufox-playwright;
-    chromiumExecutable = "${yourExistingChromium}/bin/chromium";
-    chromiumSandbox = yourExistingChromiumSandboxSetting;
-  };
+  browserPaths = config.programs.playwright-cli.filesystem;
 in {
-  home.packages = [ vibes.camoufox vibes.camoufox-playwright ];
-  home.file.".playwright/cli.config.json".source = configs.chromium;
-  xdg.configFile."playwright/chromium.json".source = configs.chromium;
-  xdg.configFile."playwright/camoufox.json".source = configs.camoufox;
+  imports = [ inputs.good-vibes-only.homeManagerModules.playwright-cli ];
+
+  programs.playwright-cli = {
+    enable = true;
+    package = derivations.playwright-cli; # Keep the existing CLI pin.
+    chromium = {
+      enable = true;
+      package = pkgs.chromium; # Or the existing consumer Chromium package.
+      sandbox = true;         # Preserve the existing sandbox setting.
+    };
+    camoufox.enable = true;   # Experimental; runtime limitation below still applies.
+  };
+
+  # Merge into both existing agent profiles; use their actual names here.
+  programs.nono.profiles = lib.genAttrs [ "claude-code" "codex" ] (_: {
+    filesystem.read = lib.mkAfter browserPaths.read;
+    filesystem.allow = lib.mkAfter browserPaths.write;
+  });
 }
 ```
 
-The Chromium executable and sandbox boolean above are required consumer inputs:
-copy the existing values, including its setuid-helper setup. Firefox's sandbox
-is separate; the adapter does not set `MOZ_DISABLE_CONTENT_SANDBOX` or reduce
-sandbox preferences.
+`filesystem.write` means paths requiring **read and write**; merge it into nono's
+`filesystem.allow`, not its write-only `filesystem.write`. The module does not
+change nono profiles itself. Keep existing profile extensions and other grants.
 
-Remove the global `PLAYWRIGHT_MCP_EXECUTABLE_PATH` assignment and put the Chromium
-executable into `~/.playwright/cli.config.json` (as above), so plain
-`playwright-cli open` still defaults to Chromium. That environment variable takes
-precedence over configuration-file executable paths. Until it is removed, use
-`env -u PLAYWRIGHT_MCP_EXECUTABLE_PATH` when opening Camoufox.
+Remove the old `home.packages` entries, generated config files and browser
+cache-directory activation plumbing now owned by this module. Retain the local
+CLI package derivation and NixOS Chromium setuid-helper setup. The module installs
+the CLI and each enabled browser package; `camoufox-playwright` already brings
+in Camoufox, so standalone `camoufox` is not additionally installed.
+
+Both backends default to disabled; enabling the module without either backend
+is an error. Chromium is the default whenever enabled; Camoufox alone becomes
+the default automatically. The module writes `~/.playwright/cli.config.json`
+and one enabled-backend config under `$XDG_CONFIG_HOME/playwright/`. It reuses
+`configurations.nix`. `camoufox.package` can override the adapter; the default
+supports only `x86_64-linux`.
+
+Activation pre-creates config directories, `${xdg.cacheHome}/ms-playwright` and
+`${xdg.cacheHome}/fontconfig`, plus `${xdg.cacheHome}/camoufox` and
+`${home.homeDirectory}/.camoufox` when Camoufox is enabled. New directories have
+mode 0700; existing permissions are preserved and activation respects dry-run.
+The module exports `XDG_CACHE_HOME` to match `xdg.cacheHome` and enables XDG
+support by default. It does not set `PLAYWRIGHT_MCP_EXECUTABLE_PATH`.
+
+Remove that old executable-path assignment from the consumer configuration.
+**Existing shells must also run:**
+
+```sh
+unset PLAYWRIGHT_MCP_EXECUTABLE_PATH
+```
+
+Its inherited value overrides backend-specific config paths even after Home
+Manager switches generations. Start a fresh shell after activation to pick up
+any changed XDG paths. Plain `playwright-cli open` defaults to Chromium when
+both backends are enabled. Explicit selection works as before (use your custom
+XDG config path if it differs from `~/.config`):
 
 ```sh
 playwright-cli -s=chrome open --config="$HOME/.config/playwright/chromium.json"
@@ -103,7 +139,14 @@ mode follows Playwright's arguments; headed mode requires a working display.
 
 ## Writable paths and nono
 
-Grant access to:
+The module exposes read-only option lists at
+`programs.playwright-cli.filesystem.read` and `.write`; both are empty when the
+module is disabled. They contain the Nix store and config directories for reads,
+and the enabled backend caches, `/tmp`, and Linux `/dev/shm` for read/write.
+They do not grant arbitrary profile directories, working directories, display
+sockets, devices or namespace operations. Preserve those host-specific grants.
+
+In particular, browser operation needs access to:
 
 - The Nix store (read/execute), including the complete browser and Python closure.
 - The selected profile directories (read/write).
@@ -185,3 +228,34 @@ These pins are candidates with a successful protocol handshake, **not a supporte
 browser/SDK/controller combination yet**. The remaining checks above must pass
 before enabling Camoufox for routine agent use. Chromium's existing package and
 sandbox configuration are consumer-owned and unchanged.
+
+## Home Manager validation
+
+The four `hm-playwright-{chromium,camoufox,both,neither}` flake checks cover
+backend selection, generated JSON, package selection, absence of the global
+executable override, custom home/config/cache paths, filesystem exports, and
+activation directory permissions, repeatability and dry-run behavior. The
+negative check requires Home Manager activation evaluation to reject no backends.
+On x86_64-linux, the Camoufox cases build configurations pointing at the real
+adapter; CLI and Chromium package fixtures isolate module tests from runtime
+browser behavior. Other systems use an adapter fixture for module evaluation.
+
+```sh
+nix build .#checks.x86_64-linux.hm-playwright-chromium \
+  .#checks.x86_64-linux.hm-playwright-camoufox \
+  .#checks.x86_64-linux.hm-playwright-both \
+  .#checks.x86_64-linux.hm-playwright-neither .#camoufox-playwright
+nix flake check --no-build --all-systems
+```
+
+These configuration checks do not certify browser sandbox compatibility. The
+runtime limitations in the report above remain separate from successful module
+build and evaluation results.
+
+Module smoke attempts on 2026-09-15 used the installed CLI's
+`1.63.0-alpha-2026-08-31` controller. Camoufox's generated configuration reached
+the pipe handshake, then page creation failed with `/proc/self/uid_map: EACCES`.
+Chromium 152.0.7977.82, using the generated sandbox setting and the consumer's
+installed executable, aborted during setuid-helper validation inside the current
+sandbox. Both browser processes were cleaned up. Neither sandbox was disabled;
+these attempts do not establish successful runtime operation under nono.
