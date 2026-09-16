@@ -25,7 +25,8 @@ only workspace members present in the head revision.
 
 Compare parsed package manifests, ignoring comments and formatting. Compare
 expanded Cargo package metadata to identify inherited workspace package and
-dependency changes. Compare inherited workspace lint tables explicitly.
+dependency changes. Compare inherited workspace lint tables explicitly, using each local package's
+own workspace, including separate virtual workspaces.
 Compare resolved dependency identities, features and edges to catch lockfile
 updates and propagate through consumers. Root resolver, profiles, patches,
 Cargo config and toolchain changes select all members with explanations.
@@ -38,7 +39,9 @@ Configuration lives under `workspace.metadata.affected`:
 `[[workspace.metadata.affected.rules]]` with `paths` (repository-relative globs)
 and `packages` (workspace package names or `*`). Consult both revisions. Invalid
 rules are errors. Unowned files conservatively select all members unless matched
-by a rule; a rule with an empty package array explicitly ignores matching files.
+by a rule; a rule with an empty package array suppresses the fallback for matching
+unowned files. Rules add consumers; they cannot suppress package-owned changes
+or global build settings.
 This gives a safe default for arbitrary build-script inputs. Tracked symlinks and
 inputs outside the repository need documented limitations; no claim of proving
 semantic equivalence of arbitrary code or environment changes.

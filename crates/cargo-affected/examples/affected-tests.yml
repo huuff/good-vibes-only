@@ -1,0 +1,43 @@
+name: Test affected Cargo packages
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  affected:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.select.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-affected
+        run: cargo install --path crates/cargo-affected --locked
+      - name: Select packages
+        id: select
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          packages=$(cargo affected --base "$BASE_SHA" --format json --explain)
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: affected
+    if: needs.affected.outputs.packages != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.affected.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test selected package
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: cargo test --locked -p "$PACKAGE"

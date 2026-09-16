@@ -2,6 +2,7 @@
   cargoArtifacts,
   craneLib,
   lib,
+  git,
   crate,
   src,
 }:
@@ -15,6 +16,9 @@ craneLib.buildPackage {
 
   cargoExtraArgs = "-p ${crate}";
   cargoTestExtraArgs = "-p ${crate}";
+
+  # cargo-affected integration tests create and inspect local Git repositories.
+  nativeCheckInputs = lib.optionals (crate == "cargo-affected") [ git ];
 
   meta = {
     description = "${crate} from the good-vibes-only workspace";

@@ -27,26 +27,46 @@ Files: `crates/cargo-affected/Cargo.toml`, `src/main.rs`, `src/git.rs`,
 Interfaces: `git::Repository::open(&Path)`, `Repository::resolve(&str)`,
 `Repository::merge_base(&str, &str)`, `Repository::export(&str)`,
 `Repository::changed(&str, &str)`; `Snapshot::load(&Path, &Path, bool)`;
-`analysis::analyze(&Snapshot, &Snapshot, &[String]) -> Result<Selection>`.
+`analysis::analyze(&Snapshot, &Snapshot, &[String]) -> Selection`.
 `Selection` maps current member names to sorted reason sets.
 
-- [ ] Scaffold with `cargo new crates/cargo-affected`; set inherited fields and dependencies.
-- [ ] Write fixture helpers that initialize Git, create local library crates, commit and invoke the real binary.
-- [ ] Add tests asserting a changed leaf selects `["app", "core", "middle"]`, while an independent crate stays excluded; unchanged snapshots emit `[]`.
-- [ ] Run `cargo test -p cargo-affected --test cli`; observe failing output against the generated main.
-- [ ] Implement Git snapshots, Cargo metadata normalization and reverse closure; run the same tests.
-- [ ] Add failing tests for manifest inheritance, deleted/renamed crates and removed edges; implement semantic manifest and graph comparison.
-- [ ] Add failing tests for resolved lock changes and global settings; implement dependency-resolution fingerprints and global invalidation.
-- [ ] Add failing tests for shared-file rules, CLI errors, exact/merge-base comparison and explanations; implement these behaviors.
-- [ ] Run `cargo test -p cargo-affected` and `cargo clippy -p cargo-affected --all-targets -- -D warnings`.
+- [x] Scaffold with `cargo new crates/cargo-affected`; set inherited fields and dependencies.
+- [x] Write fixture helpers that initialize Git, create local library crates, commit and invoke the real binary.
+- [x] Add tests asserting a changed leaf selects `["app", "core", "middle"]`, while an independent crate stays excluded; unchanged snapshots emit `[]`.
+- [x] Run `cargo test -p cargo-affected --test cli`; observe failing output against the generated main.
+- [x] Implement Git snapshots, Cargo metadata normalization and reverse closure; run the same tests.
+- [x] Add failing tests for manifest inheritance, deleted/renamed crates and removed edges; implement semantic manifest and graph comparison.
+- [x] Add failing tests for resolved lock changes and global settings; implement dependency-resolution fingerprints and global invalidation.
+- [x] Add failing tests for shared-file rules, CLI errors, exact/merge-base comparison and explanations; implement these behaviors.
+- [x] Run `cargo test -p cargo-affected` and `cargo clippy -p cargo-affected --all-targets -- -D warnings`.
 
 ## Task 2: Documentation and independent review
 
 Files: `crates/cargo-affected/README.md`, `examples/affected-tests.yml`.
 
-- [ ] Document committed-snapshot behavior, conservative cases, external inputs and requirements.
-- [ ] Provide install commands and a JSON matrix workflow guarded with `needs.affected.outputs.packages != '[]'`.
-- [ ] Exercise the CLI against this repository and an actual example fixture.
-- [ ] Run `cargo fmt --all -- --check` and `cargo test --workspace --locked`.
-- [ ] Review complete diff for correctness and spec coverage; fix findings with regression tests.
-- [ ] Commit with Conventional Commit messages and confirm a clean worktree.
+- [x] Document committed-snapshot behavior, conservative cases, external inputs and requirements.
+- [x] Provide install commands and a JSON matrix workflow guarded with `needs.affected.outputs.packages != '[]'`.
+- [x] Exercise the CLI against this repository and an actual example fixture.
+- [x] Run `cargo fmt --all -- --check` and `cargo test --workspace --locked`.
+- [x] Review complete diff for correctness and spec coverage; fix findings with regression tests.
+- [x] Commit with Conventional Commit messages and confirm a clean worktree.
+
+## Verification record
+
+- Original workspace baseline: 107 tests passed.
+- New CLI: 31 integration tests passed, exercising real Git and Cargo, including
+  lockfile-only Git updates and all independently reported regressions.
+- Strict package Clippy and workspace formatting passed.
+- `nix flake check --no-build` passed on x86_64-linux.
+- Historical repository change `46acb765f^..46acb765f` selected only `tally`,
+  with explanations identifying its two changed source files.
+- Independent review approved the final fixes for export attributes, shared rules
+  on manifests, nested inherited lints, SHA-256 Git, and temporary path encoding.
+
+## Decisions clarified during implementation
+
+- Rules add consumers and suppress only the unowned-file fallback; they cannot
+  suppress intrinsic package changes. This preserves safe dependency selection.
+- Arbitrary workspace metadata is conservatively treated as a shared build input.
+- Native Nix checks supply Git for the new integration tests. Existing CI remains
+  unchanged; the selectable matrix is delivered as a complete example workflow.
