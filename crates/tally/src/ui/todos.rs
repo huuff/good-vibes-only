@@ -13,27 +13,7 @@ pub fn todos(data: Signal<TodoData>, overlays: Overlays, lang: Language) -> Elem
     let t = lang.strings();
     let today = clock::today();
     let snapshot = data();
-    let mut due: Vec<_> = snapshot
-        .todos
-        .iter()
-        .filter(|todo| todo.target_date.is_some_and(|date| date <= today))
-        .cloned()
-        .collect();
-    let mut later: Vec<_> = snapshot
-        .todos
-        .iter()
-        .filter(|todo| todo.target_date.is_some_and(|date| date > today))
-        .cloned()
-        .collect();
-    let mut anytime: Vec<_> = snapshot
-        .todos
-        .iter()
-        .filter(|todo| todo.target_date.is_none())
-        .cloned()
-        .collect();
-    due.sort_by_key(|todo| (todo.done, todo.target_time, todo.id));
-    later.sort_by_key(|todo| (todo.done, todo.target_date, todo.target_time, todo.id));
-    anytime.sort_by_key(|todo| (todo.done, todo.id));
+    let [overdue, due, later, anytime] = group_todos(&snapshot.todos, today);
 
     rsx! {
         section { class: "todos-screen",
@@ -50,6 +30,7 @@ pub fn todos(data: Signal<TodoData>, overlays: Overlays, lang: Language) -> Elem
                         span { {t.empty_todos_hint} }
                     }
                 } else {
+                    {todo_group(t.grp_overdue, overdue, data, overlays, today, lang)}
                     {todo_group(t.grp_today, due, data, overlays, today, lang)}
                     {todo_group(t.grp_later, later, data, overlays, today, lang)}
                     {todo_group(t.grp_anytime, anytime, data, overlays, today, lang)}
@@ -57,6 +38,24 @@ pub fn todos(data: Signal<TodoData>, overlays: Overlays, lang: Language) -> Elem
             }
         }
     }
+}
+
+/// Keep past dates separate so only tasks dated today appear under Today.
+fn group_todos(todos: &[Todo], today: NaiveDate) -> [Vec<Todo>; 4] {
+    let mut groups: [Vec<Todo>; 4] = std::array::from_fn(|_| Vec::new());
+    for todo in todos {
+        let group = match todo.target_date {
+            Some(date) if date < today => 0,
+            Some(date) if date == today => 1,
+            Some(_) => 2,
+            None => 3,
+        };
+        groups[group].push(todo.clone());
+    }
+    for group in &mut groups {
+        group.sort_by_key(|todo| (todo.done, todo.target_date, todo.target_time, todo.id));
+    }
+    groups
 }
 
 fn todo_group(
@@ -245,6 +244,51 @@ pub fn add_sheet(
                     }
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dated_todos_are_grouped_by_their_actual_date() {
+        // Include both year boundaries and completion states.
+        let today = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let mut data = TodoData::default();
+        for date in [
+            today.pred_opt(),
+            Some(today),
+            today.succ_opt(),
+            NaiveDate::from_ymd_opt(2027, 1, 1),
+            None,
+        ] {
+            data.add("Task", date, None, Difficulty::Medium);
+        }
+        for done in [false, true] {
+            for todo in &mut data.todos {
+                todo.done = done;
+            }
+            let groups = group_todos(&data.todos, today);
+            let ids = groups.map(|group| group.iter().map(|todo| todo.id).collect::<Vec<_>>());
+            assert_eq!(ids, [vec![0], vec![1], vec![2, 3], vec![4]]);
+        }
+    }
+
+    #[test]
+    fn only_todays_date_is_labeled_today() {
+        let today = NaiveDate::from_ymd_opt(2026, 9, 16).unwrap();
+        let mut data = TodoData::default();
+        for date in [today.pred_opt(), Some(today), today.succ_opt(), None] {
+            data.add("Task", date, None, Difficulty::Medium);
+        }
+        for lang in Language::ALL {
+            let label = Some(lang.strings().grp_today.to_string());
+            assert_ne!(todo_meta(&data.todos[0], today, lang), label);
+            assert_eq!(todo_meta(&data.todos[1], today, lang), label);
+            assert_ne!(todo_meta(&data.todos[2], today, lang), label);
+            assert_eq!(todo_meta(&data.todos[3], today, lang), None);
         }
     }
 }
