@@ -230,7 +230,7 @@ button:disabled {
 }
 
 .fab-new {
-  position: absolute;
+  position: fixed;
   right: 20px;
   bottom: calc(72px + env(safe-area-inset-bottom));
   z-index: 2;
@@ -247,6 +247,14 @@ button:disabled {
   font-weight: 400;
   line-height: 1;
   box-shadow: 0 6px 16px color-mix(in srgb, var(--text) 24%, transparent);
+}
+
+/* Let the last list item scroll clear of the floating add button. */
+@media (max-width: 899px) {
+  .ledger,
+  .todo-list {
+    padding-bottom: 90px;
+  }
 }
 
 /* --- Settings ------------------------------------------------------- */
@@ -1474,6 +1482,9 @@ button:disabled {
 @media (min-width: 900px) {
   .rail {
     display: flex;
+    position: sticky;
+    top: 0;
+    height: 100dvh;
   }
 
   .side {
