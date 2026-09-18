@@ -31,6 +31,12 @@ fn default_sticking_target() -> u32 {
 /// wholesale.
 pub const EDIT_WINDOW_DAYS: u64 = 7;
 
+/// Continuous missed days required to halve the current habit strength.
+/// Keeping this separate from the frequency-scaled gain rate makes lapses
+/// visible promptly without making infrequent habits artificially quick to
+/// establish.
+const STRENGTH_DECAY_HALF_LIFE_DAYS: f64 = 7.0;
+
 /// Whether `day` is still within the edit window
 /// (today or up to [`EDIT_WINDOW_DAYS`] back).
 pub fn editable(day: NaiveDate) -> bool {
@@ -318,9 +324,9 @@ impl Habit {
     }
 
     /// Habit strength for the detail chart (Loop Habit Tracker's model):
-    /// an exponential moving average of daily satisfaction whose decay is
-    /// scaled by the schedule's expected frequency, so a weekly habit
-    /// builds as fast as a daily one. `points` samples `step` days apart
+    /// an exponential moving average of daily satisfaction. Gains are scaled
+    /// by the schedule's expected frequency, while seven genuinely missed
+    /// days halve the current strength. `points` samples `step` days apart
     /// ending today, oldest first, each in `0..=1`.
     pub fn strength_series(
         &self,
@@ -345,8 +351,8 @@ impl Habit {
                 f64::from(times.max(1)) / f64::from(days.max(1))
             }
         };
-        // Loop's constant: strength halves after ~13 missed repetitions.
-        let keep = 0.5_f64.powf(freq.sqrt() / 13.0);
+        let gain_keep = 0.5_f64.powf(freq.sqrt() / 13.0);
+        let miss_keep = 0.5_f64.powf(1.0 / STRENGTH_DECAY_HALF_LIFE_DAYS);
         let mut strength = 0.0;
         let mut next = out
             .iter()
@@ -354,9 +360,10 @@ impl Habit {
             .unwrap_or(out.len());
         let mut day = first;
         while day <= today {
-            strength *= keep;
             if self.satisfied_on_with_week_start(day, week_first) {
-                strength += 1.0 - keep;
+                strength = strength * gain_keep + (1.0 - gain_keep);
+            } else {
+                strength *= miss_keep;
             }
             while next < out.len() && out[next].0 == day {
                 out[next].1 = strength;
@@ -690,6 +697,31 @@ mod tests {
         let series = young.strength_series(12, 7, WeekStart::Monday);
         assert_eq!(series[0].1, 0.0);
         assert!(series.last().unwrap().1 > 0.0);
+    }
+
+    #[test]
+    fn strength_halves_after_seven_missed_days() {
+        let today = day(0);
+        let last_done = today - Days::new(7);
+        let h = on(Schedule::Daily, &[last_done]);
+        let series = h.strength_series(1, 1, WeekStart::Monday);
+        let initial = 1.0 - 0.5_f64.powf(1.0 / 13.0);
+
+        assert!((series[0].1 - initial / 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn flexible_schedule_decays_only_after_its_grace_window_expires() {
+        let today = day(0);
+        let last_done = today - Days::new(13);
+        let h = on(Schedule::EveryNDays { n: 7 }, &[last_done]);
+        let series = h.strength_series(1, 1, WeekStart::Monday);
+        let gain_keep = 0.5_f64.powf((1.0 / 7.0_f64).sqrt() / 13.0);
+        let strength_after_grace = 1.0 - gain_keep.powi(7);
+
+        // The completion satisfies seven days; the following seven misses
+        // then halve the accumulated strength.
+        assert!((series[0].1 - strength_after_grace / 2.0).abs() < 1e-12);
     }
 
     #[test]
