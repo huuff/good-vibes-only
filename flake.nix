@@ -12,10 +12,9 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    opendesign = {
-      url = "path:./forks/opendesign";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.home-manager.follows = "home-manager";
+    opendesign-src = {
+      url = "tarball+https://github.com/nexu-io/open-design/archive/refs/tags/open-design-v0.22.2.tar.gz";
+      flake = false;
     };
   };
 
@@ -25,7 +24,7 @@
       nixpkgs,
       crane,
       home-manager,
-      opendesign,
+      opendesign-src,
       ...
     }:
     let
@@ -57,6 +56,13 @@
         import ./nix/tests/playwright-cli.nix {
           inherit pkgs home-manager;
           module = ./nix/home-manager/playwright-cli.nix;
+        };
+
+      opendesignPackages =
+        pkgs:
+        import ./nix/opendesign {
+          inherit pkgs;
+          source = opendesign-src;
         };
 
       # One package per workspace crate, built with `cargo build -p <crate>`.
@@ -104,7 +110,8 @@
         cratePackages pkgs
         // extraPackages pkgs
         // {
-          opendesign = opendesign.packages.${pkgs.stdenv.hostPlatform.system}.daemon;
+          opendesign = (opendesignPackages pkgs).daemon;
+          opendesign-web = (opendesignPackages pkgs).web;
         }
       );
 
@@ -113,14 +120,20 @@
       # Every nix/home-manager/<name>.nix is exported as
       # homeManagerModules.<name>.
       homeManagerModules = nixFilesIn ./nix/home-manager // {
-        open-design = opendesign.homeManagerModules.open-design;
+        open-design = import ./nix/opendesign/home-manager.nix {
+          moduleCommon = import ./nix/opendesign/module-common.nix;
+          flake = self;
+        };
       };
 
       homeModules = self.homeManagerModules;
 
       nixosModules = {
         home-media-system = ./nix/nixos/home-media-system.nix;
-        open-design = opendesign.nixosModules.open-design;
+        open-design = import ./nix/opendesign/nixos.nix {
+          moduleCommon = import ./nix/opendesign/module-common.nix;
+          flake = self;
+        };
       };
 
       nixosConfigurations.home-media-system-vm = nixpkgs.lib.nixosSystem {
@@ -189,6 +202,58 @@
         hm-playwright-camoufox = (playwrightChecks pkgs).camoufox;
         hm-playwright-both = (playwrightChecks pkgs).both;
         hm-playwright-neither = (playwrightChecks pkgs).neither;
+
+        # Eval-only smoke tests for both OpenDesign service modules. Use tiny
+        # stand-in packages so `nix flake check --no-build` validates the
+        # generated service definitions without pulling the application build
+        # into the module tests.
+        hm-open-design =
+          (home-manager.lib.homeManagerConfiguration {
+            inherit pkgs;
+            modules = [
+              self.homeManagerModules.open-design
+              {
+                home = {
+                  username = "vibes";
+                  homeDirectory = "/home/vibes";
+                  stateVersion = "25.11";
+                };
+                services.open-design = {
+                  enable = true;
+                  package = pkgs.hello;
+                  autoStart = true;
+                  extraEnv.OD_CODEX_DISABLE_PLUGINS = "1";
+                  extraBinPaths = [ "/opt/agents/bin" ];
+                  webFrontend = {
+                    enable = true;
+                    package = pkgs.emptyDirectory;
+                  };
+                };
+              }
+            ];
+          }).activationPackage;
+
+        nixos-open-design =
+          (lib.nixosSystem {
+            system = pkgs.stdenv.hostPlatform.system;
+            modules = [
+              self.nixosModules.open-design
+              {
+                boot.isContainer = true;
+                system.stateVersion = "25.11";
+                services.open-design = {
+                  enable = true;
+                  package = pkgs.hello;
+                  autoStart = true;
+                  openFirewall = true;
+                  webFrontend = {
+                    enable = true;
+                    package = pkgs.emptyDirectory;
+                  };
+                };
+              }
+            ];
+          }).config.system.build.toplevel;
 
         camoufox-launch-settings =
           pkgs.runCommand "camoufox-launch-settings"
