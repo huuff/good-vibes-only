@@ -1,10 +1,18 @@
 {
   pkgs,
+  daemonNodejs,
   source,
 }:
 let
   inherit (pkgs) lib;
   nodejs = pkgs.nodejs_24;
+  # Node 24.19.0 regressed cleanup-hook handling used by better-sqlite3's
+  # legacy ObjectWrap implementation. The caller supplies 24.18.0 from the
+  # dedicated, revision-pinned nixpkgs input so both node-gyp and bin/od use
+  # the identical runtime and ABI.
+  _daemonNodeVersion = lib.assertMsg (daemonNodejs.version == "24.18.0") ''
+    OpenDesign daemon requires Node.js 24.18.0, got ${daemonNodejs.version}
+  '';
   inherit (lib.importJSON "${source}/package.json") version;
 
   filterProjectSource =
@@ -101,16 +109,15 @@ let
     };
   });
 
-  daemon = pkgs.callPackage ./package-daemon.nix {
-    inherit
-      nodejs
-      pnpm_10
-      version
-      ;
-    src = daemonSrc;
-    pnpmDepsSrc = daemonPnpmDepsSrc;
-    workspacePaths = daemonWorkspacePaths;
-  };
+  daemon =
+    assert _daemonNodeVersion;
+    pkgs.callPackage ./package-daemon.nix {
+      inherit pnpm_10 version;
+      nodejs = daemonNodejs;
+      src = daemonSrc;
+      pnpmDepsSrc = daemonPnpmDepsSrc;
+      workspacePaths = daemonWorkspacePaths;
+    };
 
   web = pkgs.callPackage ./package-web.nix {
     inherit

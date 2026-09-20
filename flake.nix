@@ -16,6 +16,10 @@
       url = "tarball+https://github.com/nexu-io/open-design/archive/refs/tags/open-design-v0.22.2.tar.gz";
       flake = false;
     };
+    # Node 24.19.0 can abort while NAN/ObjectWrap-based native addons run
+    # cleanup hooks. Keep OpenDesign and its better-sqlite3 build on the last
+    # known-good 24.x runtime without constraining the rest of this flake.
+    opendesign-node-nixpkgs.url = "github:NixOS/nixpkgs/624af665418d3c65d544145b4d34ad696439570e";
   };
 
   outputs =
@@ -25,6 +29,7 @@
       crane,
       home-manager,
       opendesign-src,
+      opendesign-node-nixpkgs,
       ...
     }:
     let
@@ -62,6 +67,7 @@
         pkgs:
         import ./nix/opendesign {
           inherit pkgs;
+          daemonNodejs = opendesign-node-nixpkgs.legacyPackages.${pkgs.stdenv.hostPlatform.system}.nodejs_24;
           source = opendesign-src;
         };
 
