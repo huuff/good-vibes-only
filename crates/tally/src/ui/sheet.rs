@@ -9,7 +9,7 @@ use super::Overlays;
 use super::schedule::{ScheduleDraft, schedule_picker};
 use crate::i18n::{Strings, fill};
 use crate::preferences::{Language, Preferences, WeekStart};
-use crate::store::{Data, editable};
+use crate::store::{Data, Habit, editable};
 
 /// The days of the month containing `month`, padded for the configured
 /// first weekday so indices line up with a 7-column grid.
@@ -27,6 +27,34 @@ fn month_cells(month: NaiveDate, week_start: WeekStart) -> Vec<Option<NaiveDate>
         }
     }
     cells
+}
+
+/// CSS classes for one calendar day. A past day that wasn't done but
+/// whose schedule target was already met (e.g. the rest of a week after
+/// a 2×/week habit's second check-in) is `undue`, not missed.
+fn day_class(
+    habit: &Habit,
+    day: NaiveDate,
+    today: NaiveDate,
+    week_start: WeekStart,
+    editable: bool,
+) -> String {
+    let done = habit.done_on(day);
+    let mut cls = String::from("cal-day");
+    if done {
+        cls.push_str(" done");
+    } else if day <= today && !habit.due_on_with_week_start(day, week_start) {
+        cls.push_str(" undue");
+    }
+    if day == today {
+        cls.push_str(" today");
+    }
+    if day > today {
+        cls.push_str(" off");
+    } else if !editable {
+        cls.push_str(" locked");
+    }
+    cls
 }
 
 pub fn detail_sheet(
@@ -133,19 +161,7 @@ pub fn detail_sheet(
                     span { class: "cal-blank" }
                 };
             };
-            let done = habit.done_on(day);
-            let mut cls = String::from("cal-day");
-            if done {
-                cls.push_str(" done");
-            }
-            if day == today {
-                cls.push_str(" today");
-            }
-            if day > today {
-                cls.push_str(" off");
-            } else if !editable(day) {
-                cls.push_str(" locked");
-            }
+            let cls = day_class(&habit, day, today, week_start, editable(day));
             rsx! {
                 button {
                     class: "{cls}",
@@ -311,6 +327,20 @@ pub fn detail_sheet(
                     }
                     {day_cells.into_iter()}
                 }
+                div { class: "cal-legend",
+                    span {
+                        span { class: "cal-key done" }
+                        {t.cal_done}
+                    }
+                    span {
+                        span { class: "cal-key undue" }
+                        {t.cal_not_due}
+                    }
+                    span {
+                        span { class: "cal-key" }
+                        {t.cal_not_done}
+                    }
+                }
                 div { class: "sheet-del",
                     if (overlays.confirm)() {
                         button {
@@ -447,6 +477,27 @@ fn target_picker(mut target: Signal<u32>, lang: Language) -> Element {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn days_after_a_met_weekly_target_are_undue_not_missed() {
+        let d = |n| NaiveDate::from_ymd_opt(2026, 9, n).unwrap();
+        // 2×/week, Monday weeks: done Tue 8th and Fri 11th.
+        let habit = Habit {
+            id: 1,
+            name: "Sport".into(),
+            schedule: crate::store::Schedule::TimesPerWeek { times: 2 },
+            sticking_target: 1,
+            days: [d(8), d(11)].into_iter().collect(),
+        };
+        let class = |n| day_class(&habit, d(n), d(23), WeekStart::Monday, true);
+        assert_eq!(class(7), "cal-day"); // still due, missed
+        assert_eq!(class(9), "cal-day"); // 1 of 2, still due
+        assert_eq!(class(8), "cal-day done");
+        assert_eq!(class(12), "cal-day undue"); // target met on the 11th
+        assert_eq!(class(13), "cal-day undue");
+        assert_eq!(class(14), "cal-day"); // new week, due again
+        assert_eq!(class(24), "cal-day off"); // future is never undue
+    }
 
     #[test]
     fn month_cells_pad_to_weekday_columns() {

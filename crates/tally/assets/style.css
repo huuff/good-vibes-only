@@ -1462,8 +1462,46 @@ button:disabled {
   cursor: default;
 }
 
-.cal-day.locked:not(.done) {
+.cal-day.locked:not(.done, .undue) {
   color: var(--muted);
+}
+
+/* Not required: the schedule's target was already met. */
+.cal-day.undue,
+.cal-key.undue {
+  background: color-mix(in srgb, var(--accent) 24%, var(--bg));
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--bg));
+}
+
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 12px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.cal-legend > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-key {
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  flex: none;
+  background: var(--surface);
+  border: 1px solid var(--divider);
+}
+
+.cal-key.done {
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .cal-day.off {
