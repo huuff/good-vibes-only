@@ -55,7 +55,17 @@ fn row(
     let t = lang.strings();
     let today = crate::clock::today();
     let done = habit.done_today();
-    let (status, accent) = habit.status_on_with_week_start(today, week_start, lang);
+    let (mut status, accent) = habit.status_on_with_week_start(today, week_start, lang);
+    // Design 15f: the reminder time as a muted caption while it's still
+    // coming today, or "REMINDER QUIET" once the period's target is met.
+    let mut reminder_caption = None;
+    if let Some(reminder) = habit.reminder.filter(|r| r.enabled) {
+        if habit.satisfied_on_with_week_start(today, week_start) {
+            status = format!("{status} · {}", t.reminder_quiet);
+        } else if reminder.applies_on(today) {
+            reminder_caption = Some(fill(t.reminder_caption, &[&reminder.time_label()]));
+        }
+    }
     let repetitions = habit.repetitions();
     let target = habit.sticking_target.max(1);
     let progress = habit.sticking_progress() * 100.0;
@@ -97,6 +107,9 @@ fn row(
                 },
                 div { class: "name", "{habit.name}" }
                 div { class: if accent { "note accent" } else { "note" }, "{status}" }
+                if let Some(caption) = reminder_caption {
+                    div { class: "note", "{caption}" }
+                }
                 div {
                     class: if habit.sticking_goal_reached() { "habit-progress reached" } else { "habit-progress" },
                     title: fill(t.milestone_title, &[&repetitions, &target]),
@@ -203,6 +216,7 @@ mod tests {
             name: "Review budget".into(),
             schedule: Schedule::TimesPerWeek { times: 1 },
             sticking_target: 30,
+            reminder: None,
             days: BTreeSet::from([NaiveDate::from_ymd_opt(2026, 7, 29).unwrap()]),
         };
 

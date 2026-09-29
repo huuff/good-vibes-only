@@ -52,27 +52,19 @@ mod backend {
     }
 
     /// The app-private files dir, via JNI: `context.getFilesDir()`.
-    /// Dioxus doesn't expose the Android context in its public API yet,
-    /// so this goes through ndk-context (the documented workaround).
     #[cfg(target_os = "android")]
     fn android_files_dir() -> Option<PathBuf> {
-        let ctx = ndk_context::android_context();
-        let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }.ok()?;
-        let mut env = vm.attach_current_thread().ok()?;
-        let context = unsafe { jni::objects::JObject::from_raw(ctx.context().cast()) };
-        let files_dir = env
-            .call_method(context, "getFilesDir", "()Ljava/io/File;", &[])
-            .ok()?
-            .l()
-            .ok()?;
-        let path: jni::objects::JString = env
-            .call_method(&files_dir, "getAbsolutePath", "()Ljava/lang/String;", &[])
-            .ok()?
-            .l()
-            .ok()?
-            .into();
-        let s = env.get_string(&path).ok()?;
-        Some(PathBuf::from(s.to_str().ok()?.to_string()))
+        crate::android::with_env(|env, context| {
+            let files_dir = env
+                .call_method(context, "getFilesDir", "()Ljava/io/File;", &[])?
+                .l()?;
+            let path: jni::objects::JString = env
+                .call_method(&files_dir, "getAbsolutePath", "()Ljava/lang/String;", &[])?
+                .l()?
+                .into();
+            let path: String = env.get_string(&path)?.into();
+            Ok(PathBuf::from(path))
+        })
     }
 
     #[cfg(not(target_os = "android"))]

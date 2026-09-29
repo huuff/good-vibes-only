@@ -9,6 +9,7 @@
 
 use crate::i18n::fill;
 use crate::preferences::{Language, WeekStart};
+use crate::reminders::{self, Reminder};
 use crate::{clock, persist};
 use chrono::{Datelike, Days, Local, NaiveDate};
 use serde::{Deserialize, Serialize};
@@ -117,6 +118,9 @@ pub struct Habit {
     /// Older v2 records deserialize to the research-informed default.
     #[serde(default = "default_sticking_target")]
     pub sticking_target: u32,
+    /// Optional reminder (Android only). Absent in older data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reminder: Option<Reminder>,
     /// The days this habit was done.
     pub days: BTreeSet<NaiveDate>,
 }
@@ -423,6 +427,7 @@ impl Data {
                     name: h.name,
                     schedule: Schedule::Daily,
                     sticking_target: DEFAULT_STICKING_TARGET,
+                    reminder: None,
                     days: h
                         .ticks
                         .iter()
@@ -433,23 +438,30 @@ impl Data {
         }
     }
 
+    /// Persist, then re-arm reminder alarms: any habit change (a
+    /// check-in, a schedule edit, a delete) can move the next reminder.
     pub fn save(&self) {
         persist::set(KEY, self);
+        reminders::sync(self);
     }
 
-    pub fn add(&mut self, name: &str, schedule: Schedule, sticking_target: u32) {
+    /// Returns the new habit's id, or None for a blank name.
+    pub fn add(&mut self, name: &str, schedule: Schedule, sticking_target: u32) -> Option<u64> {
         let name = name.trim();
         if name.is_empty() {
-            return;
+            return None;
         }
+        let id = self.next_id;
         self.habits.push(Habit {
-            id: self.next_id,
+            id,
             name: name.to_string(),
             schedule,
             sticking_target: sticking_target.max(1),
+            reminder: None,
             days: BTreeSet::new(),
         });
         self.next_id += 1;
+        Some(id)
     }
 
     /// Flip `day` between done and not done. Days outside the edit window
@@ -484,6 +496,12 @@ impl Data {
     pub fn set_sticking_target(&mut self, id: u64, target: u32) {
         if let Some(habit) = self.habits.iter_mut().find(|h| h.id == id) {
             habit.sticking_target = target.max(1);
+        }
+    }
+
+    pub fn set_reminder(&mut self, id: u64, reminder: Option<Reminder>) {
+        if let Some(habit) = self.habits.iter_mut().find(|h| h.id == id) {
+            habit.reminder = reminder;
         }
     }
 
@@ -600,6 +618,7 @@ mod tests {
             name: "test".into(),
             schedule: Schedule::Daily,
             sticking_target: DEFAULT_STICKING_TARGET,
+            reminder: None,
             days: days_back.iter().map(|&b| day(b)).collect(),
         }
     }
@@ -614,6 +633,7 @@ mod tests {
             name: "test".into(),
             schedule,
             sticking_target: DEFAULT_STICKING_TARGET,
+            reminder: None,
             days: days.iter().copied().collect(),
         }
     }

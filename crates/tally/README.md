@@ -41,6 +41,14 @@ Storage is schema v2 (`habits/v2`). Data recorded by the v1 app
 is left in place as a backup. The schedule field is additive: data
 written before schedules existed simply reads back as daily.
 
+Habits can carry a reminder on Android (design turn 15): one per habit,
+a time plus the weekdays it applies to, set from the new-habit form or
+the habit's detail sheet. A reminder only fires while the habit is still
+due in its current period — once the day's or week's target is met it
+stays quiet — and the notification's DONE checks the habit in without
+opening the app, while LATER re-fires once an hour on. The web/PWA build
+hides reminders: a browser tab can't be woken at a set time.
+
 ## Develop
 
 ```sh
@@ -83,8 +91,8 @@ cp -R android/res/. "$android_app/app/src/main/res/"
 "$android_app/gradlew" -p "$android_app" assembleDebug
 ```
 
-The copy-and-reassemble step applies TALLY's launcher icon after Dioxus
-generates its Android project. Dioxus 0.7 currently parses the configured
+The copy-and-reassemble step applies TALLY's launcher icon (and the
+reminder notification icon) after Dioxus generates its Android project. Dioxus 0.7 currently parses the configured
 bundle icon but still writes its stock Android resources during APK builds.
 
 The explicit `--target` matters: without it dx assumes an emulator
@@ -93,6 +101,17 @@ toolchain can't do. The APK lands under
 `target/dx/tally/release/android/app/app/build/outputs/apk/debug/app-debug.apk` —
 Gradle's *debug variant*, but the Rust inside is the release build, and
 it's debug-signed, which is exactly what sideloading wants.
+
+Reminders need native Android pieces dx's templates can't declare — a
+broadcast receiver for alarms and notification buttons, one for boot and
+clock changes, and the notification/exact-alarm permissions. They live in
+`android/AndroidManifest.xml` and `android/MainActivity.kt`, which
+Dioxus.toml hands to dx in place of its generated manifest and activity;
+the manifest is dx 0.7's template plus those additions, so re-check it
+against a newly generated one after a dx upgrade. Scheduling decisions
+stay in Rust (`src/reminders.rs`); the Kotlin side only arms alarms and
+posts notifications, calling back into Rust through JNI
+(`src/android.rs`).
 
 Install: `adb install <apk>` (USB debugging), or copy the file to the
 phone and open it (allow "install unknown apps"). Storage on Android is

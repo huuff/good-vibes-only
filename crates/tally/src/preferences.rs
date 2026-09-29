@@ -130,6 +130,11 @@ impl Preferences {
 
     pub fn save(&self) {
         persist::set(KEY, self);
+        // The week start moves weekly-target periods, and with them the
+        // next due reminder.
+        if crate::reminders::SUPPORTED {
+            crate::reminders::sync(&crate::store::Data::load());
+        }
     }
 }
 

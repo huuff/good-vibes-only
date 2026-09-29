@@ -1515,6 +1515,204 @@ button:disabled {
   margin-top: 16px;
 }
 
+/* --- reminders (design turn 15) ---------------------------------------- */
+
+.reminder-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-reminder {
+  margin-top: 16px;
+}
+
+.sheet-reminder .how-label {
+  margin-top: 0;
+}
+
+.reminder-row {
+  width: 100%;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  border: 1px solid var(--divider);
+  text-align: left;
+}
+
+.reminder-row:active {
+  background: var(--surface);
+}
+
+.reminder-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.reminder-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.reminder-sum {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.chev {
+  font-size: 18px;
+  color: var(--muted);
+}
+
+.rem-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--divider);
+}
+
+.rem-head h2 {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.rem-close {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--divider);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Design 15e: the system is blocking notifications. */
+.rem-blocked {
+  margin-top: 16px;
+  padding: 16px 18px;
+  border: 2px solid var(--text);
+  background: var(--surface);
+}
+
+.rem-blocked-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.rem-blocked p {
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.rem-blocked .btn-quiet {
+  margin-top: 12px;
+  min-height: 44px;
+  color: var(--text);
+  border-color: var(--text);
+}
+
+.rem-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 64px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.rem-toggle strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.rem-state {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.rem-time {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--divider);
+}
+
+.rem-time .how-label,
+.rem-days .how-label {
+  margin-top: 0;
+}
+
+.rem-time input {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: 0;
+}
+
+.rem-time input:focus-visible {
+  border-color: var(--accent);
+  outline-offset: 0;
+}
+
+.rem-days {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--divider);
+}
+
+.rem-chips {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin: 10px 0 12px;
+}
+
+.rem-chip {
+  min-width: 0;
+  height: 44px;
+  text-align: center;
+  border: 1px solid var(--divider);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.rem-chip.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+.rem-off {
+  opacity: 0.45;
+}
+
+.rem-save {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 16px;
+}
+
 /* --- desktop (the 2a layout) ------------------------------------------- */
 
 @media (min-width: 900px) {

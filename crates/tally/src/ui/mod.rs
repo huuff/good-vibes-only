@@ -5,6 +5,7 @@
 
 mod ledger;
 mod nav;
+mod reminder;
 mod rewards;
 mod schedule;
 mod settings;
@@ -17,9 +18,11 @@ use dioxus::prelude::*;
 
 use crate::clock;
 use crate::preferences::Preferences;
+use crate::reminders::{self, Reminder};
 use crate::rewards::{Reward, RewardData};
 use crate::store::{DEFAULT_STICKING_TARGET, Data};
 use crate::todos::{Difficulty, Todo, TodoData};
+use reminder::ReminderTarget;
 use schedule::ScheduleDraft;
 
 /// Tracked through the dioxus asset system (not inlined in index.html) so
@@ -81,6 +84,11 @@ pub struct Overlays {
     pub reward_cost: Signal<String>,
     /// Reward whose edit sheet is open (the add form, prefilled).
     pub reward_edit: Signal<Option<u64>>,
+    /// Open reminder sheet, stacked over the add form or habit detail.
+    pub reminder: Signal<Option<ReminderTarget>>,
+    pub reminder_draft: Signal<Reminder>,
+    /// The add form's reminder, applied when the habit is created.
+    pub new_reminder: Signal<Option<Reminder>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -105,8 +113,22 @@ impl Overlays {
         self.name_draft.set(String::new());
         self.sched_draft.set(ScheduleDraft::default());
         self.target_draft.set(DEFAULT_STICKING_TARGET);
+        self.new_reminder.set(None);
         self.adding.set(true);
         push_history_entry();
+    }
+
+    /// The reminder sheet, drafting from `current` (or a fresh default).
+    /// An on reminder without notification access asks for it right away;
+    /// once the user has refused, the sheet's blocked notice takes over.
+    pub fn open_reminder(&mut self, target: ReminderTarget, current: Option<Reminder>) {
+        let draft = current.unwrap_or_default();
+        self.reminder_draft.set(draft);
+        self.reminder.set(Some(target));
+        push_history_entry();
+        if draft.enabled && !reminders::notifications_allowed() {
+            reminders::request_permission();
+        }
     }
 
     pub fn open_add_todo(&mut self) {
@@ -173,6 +195,10 @@ fn push_history_entry() {
 
 pub fn app() -> Element {
     let data = use_signal(Data::load);
+    // Launch re-arms every reminder: covers a fresh install or update, and
+    // a reboot whose broadcast was missed.
+    use_hook(|| reminders::sync(&data.peek()));
+    let mut notifications_allowed = use_signal(reminders::notifications_allowed);
     let todo_data = use_signal(TodoData::load);
     let reward_data = use_signal(RewardData::load);
     let preferences = use_signal(Preferences::load);
@@ -197,6 +223,9 @@ pub fn app() -> Element {
         reward_name: use_signal(String::new),
         reward_cost: use_signal(String::new),
         reward_edit: use_signal(|| None),
+        reminder: use_signal(|| None),
+        reminder_draft: use_signal(Reminder::default),
+        new_reminder: use_signal(|| None),
     };
 
     // Back-gesture handling: every history pop closes the open sheet
@@ -211,6 +240,12 @@ pub fn app() -> Element {
                  await new Promise(() => {});",
             );
             while pops.recv::<bool>().await.is_ok() {
+                // The reminder sheet stacks on another sheet, and has its
+                // own history entry: a pop closes just the top one.
+                if overlays.reminder.peek().is_some() {
+                    overlays.reminder.set(None);
+                    continue;
+                }
                 overlays.detail.set(None);
                 overlays.adding.set(false);
                 overlays.adding_todo.set(false);
@@ -234,6 +269,35 @@ pub fn app() -> Element {
             );
             while let Ok(dark) = changes.recv::<bool>().await {
                 system_dark.set(dark);
+            }
+        });
+    });
+
+    // Reminder upkeep, once a second: a notification's Done writes habit
+    // data behind the UI's back (reload it before the UI's next save can
+    // overwrite it), and notification access can change in system
+    // settings while the reminder sheet is open.
+    use_effect(move || {
+        if !reminders::SUPPORTED {
+            return;
+        }
+        spawn(async move {
+            let mut data = data;
+            let mut seen = reminders::external_writes();
+            let mut ticks = document::eval(
+                "setInterval(() => dioxus.send(true), 1000);
+                 await new Promise(() => {});",
+            );
+            while ticks.recv::<bool>().await.is_ok() {
+                let writes = reminders::external_writes();
+                if writes != seen {
+                    seen = writes;
+                    data.set(Data::load());
+                }
+                let allowed = reminders::notifications_allowed();
+                if *notifications_allowed.peek() != allowed {
+                    notifications_allowed.set(allowed);
+                }
             }
         });
     });
@@ -269,6 +333,7 @@ pub fn app() -> Element {
             {sheet::add_sheet(data, overlays, preferences)}
             {todos::add_sheet(todo_data, overlays, lang, rewards_on)}
             {rewards::add_sheet(reward_data, overlays, lang)}
+            {reminder::reminder_sheet(data, overlays, preferences, notifications_allowed)}
         }
     }
 }

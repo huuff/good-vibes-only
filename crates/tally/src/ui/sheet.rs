@@ -6,6 +6,7 @@ use chrono::{Datelike, Days, Months, NaiveDate};
 use dioxus::prelude::*;
 
 use super::Overlays;
+use super::reminder::{ReminderTarget, reminder_row};
 use super::schedule::{ScheduleDraft, schedule_picker};
 use crate::i18n::{Strings, fill};
 use crate::preferences::{Language, Preferences, WeekStart};
@@ -341,6 +342,16 @@ pub fn detail_sheet(
                         {t.cal_not_done}
                     }
                 }
+                div { class: "sheet-reminder",
+                    {reminder_row(
+                        habit.reminder,
+                        habit.schedule,
+                        overlays,
+                        ReminderTarget::Habit(id),
+                        week_start,
+                        lang,
+                    )}
+                }
                 div { class: "sheet-del",
                     if (overlays.confirm)() {
                         button {
@@ -386,11 +397,13 @@ pub fn add_sheet(
             return;
         }
         data.with_mut(|d| {
-            d.add(
+            if let Some(id) = d.add(
                 &name,
                 (overlays.sched_draft)().schedule(),
                 (overlays.target_draft)(),
-            );
+            ) {
+                d.set_reminder(id, (overlays.new_reminder)());
+            }
             d.save();
         });
         overlays.dismiss();
@@ -434,6 +447,14 @@ pub fn add_sheet(
                     }
                     {schedule_picker(overlays.sched_draft, preferences().week_start, lang)}
                     {target_picker(overlays.target_draft, lang)}
+                    {reminder_row(
+                        (overlays.new_reminder)(),
+                        (overlays.sched_draft)().schedule(),
+                        overlays,
+                        ReminderTarget::NewHabit,
+                        preferences().week_start,
+                        lang,
+                    )}
                     button {
                         class: "btn",
                         disabled: (overlays.name_draft)().trim().is_empty(),
@@ -487,6 +508,7 @@ mod tests {
             name: "Sport".into(),
             schedule: crate::store::Schedule::TimesPerWeek { times: 2 },
             sticking_target: 1,
+            reminder: None,
             days: [d(8), d(11)].into_iter().collect(),
         };
         let class = |n| day_class(&habit, d(n), d(23), WeekStart::Monday, true);
